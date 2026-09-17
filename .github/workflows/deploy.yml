@@ -41,5 +41,6 @@ jobs:
           TAG: build-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" 52okp-oss.tar.gz --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "程序更新 $TAG" --notes "已通过 PHP 8.5 及更新安全测试。提交：$GITHUB_SHA。管理员在后台点击更新后才上线。"
+          VERSION=$(tr -d '\r\n' < deploy/version.txt)
+          gh release create "$TAG" 52okp-oss.tar.gz --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "$VERSION" --notes "程序版本：$VERSION。已通过 PHP 8.5 及更新安全测试。内部构建：$TAG。提交：$GITHUB_SHA。管理员在后台点击更新后才上线。"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

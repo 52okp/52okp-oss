@@ -98,7 +98,7 @@ $assetVersion = substr(hash_file('sha256', __DIR__ . '/app.js'), 0, 12);
 <?php else: ?>
 <form method="post"><?php token(); ?><button name="action" value="logout">退出登录</button></form>
 <?php $updateState = $updates['state']; $updateProgress = $updateState['progress']; $latestTag = (string)($updateState['latest']['tag'] ?? ''); $updateBusy = $updateProgress['active']; ?>
-<section id="updates"><h2>程序更新</h2><p>当前版本：<span id="current-version"><?=h($updates['current'])?></span></p><p>最新版本：<span id="latest-version"><?=h($latestTag ?: '请先检查更新')?></span></p>
+<section id="updates"><h2>程序更新</h2><p>当前版本：<span id="current-version"><?=h($updates['current_version'])?></span></p><p>最新版本：<span id="latest-version"><?=h($updateState['latest_version'] ?: '请先检查更新')?></span></p>
 <div id="update-task" aria-busy="<?= $updateBusy ? 'true' : 'false' ?>">
 <div class="update-progress-heading"><span id="update-stage"><?=h($updateProgress['label'])?></span><span id="update-percent"><?= $updateProgress['percent'] === null ? '处理中' : h((string)$updateProgress['percent']) . '%' ?></span></div>
 <progress id="update-progress" max="100"<?= $updateProgress['percent'] === null ? '' : ' value="' . h((string)$updateProgress['percent']) . '"' ?> aria-label="程序更新任务阶段进度"></progress>

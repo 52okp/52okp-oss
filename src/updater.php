@@ -18,6 +18,10 @@ function updateWrite(string $name, array $data): void {
     } finally { if (is_file($tmp)) unlink($tmp); }
 }
 
+function updateVersionLabel(string $name, string $fallback): string {
+    return preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $name) ? $name : $fallback;
+}
+
 function updateStatus(): array {
     global $root;
     $state = updateRead('status');
@@ -31,7 +35,10 @@ function updateStatus(): array {
     $state['task'] = $matching ? ($task['type'] ?? '') : ($request['type'] ?? '');
     $state['started'] = $matching ? ($task['started'] ?? 0) : ($state['updated'] ?? 0);
     $state['progress'] = updateProgress((string)($state['phase'] ?? 'idle'));
-    return ['enabled' => $enabled, 'connected' => $enabled && ($heartbeat['at'] ?? 0) > time() - 180, 'current' => $current, 'state' => $state];
+    $versionPath = dirname(__DIR__) . '/deploy/version.txt';
+    $version = is_file($versionPath) ? trim(file_get_contents($versionPath)) : '';
+    $state['latest_version'] = updateVersionLabel((string)($state['latest']['name'] ?? ''), (string)($state['latest']['tag'] ?? ''));
+    return ['enabled' => $enabled, 'connected' => $enabled && ($heartbeat['at'] ?? 0) > time() - 180, 'current' => $current, 'current_version' => updateVersionLabel($version, $current), 'state' => $state];
 }
 
 function updateProgress(string $phase): array {

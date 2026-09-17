@@ -60,8 +60,8 @@ if (updateForm) {
     if (notice && state.job !== noticeJob) notice = '';
     lastData = data;
     busy = Boolean(details.active);
-    document.querySelector('#current-version').textContent = data.current;
-    document.querySelector('#latest-version').textContent = state.latest?.tag || '请先检查更新';
+    document.querySelector('#current-version').textContent = data.current_version || data.current;
+    document.querySelector('#latest-version').textContent = state.latest_version || state.latest?.tag || '请先检查更新';
     tag.value = state.latest?.tag || '';
     check.disabled = busy || submitting || !data.connected;
     install.disabled = busy || submitting || !data.connected || !tag.value || tag.value === data.current;
@@ -69,7 +69,7 @@ if (updateForm) {
     install.textContent = busy && state.task === 'install' ? '更新中…' : '更新程序';
     showProgress(state.phase || 'idle', details);
     let text = state.message || '更新服务已连接，点击检查更新获取最新版本';
-    if (state.phase === 'checked' && tag.value === data.current) text = `检查完成，当前已是最新版本：${data.current}`;
+    if (state.phase === 'checked' && tag.value === data.current) text = `检查完成，当前已是最新版本：${data.current_version || data.current}`;
     if (!data.connected) text = busy ? `${text}。服务心跳已超时，请检查本地更新服务；不要重复提交任务。` : '更新服务未连接，请检查或启动本地更新服务';
     if (state.phase === 'queued' && Date.now() / 1000 - state.started > 30) text += '。已等待超过 30 秒，请检查本地服务日志；任务不会重复提交。';
     message.textContent = notice ? `${notice}。${text}` : text;
@@ -120,7 +120,7 @@ if (updateForm) {
     event.preventDefault();
     const action = event.submitter?.value;
     if (!action || busy || submitting) return;
-    if (action === 'install_update' && !confirm(`确定更新程序至 ${tag.value}？账号和上传文件不受影响。`)) return;
+    if (action === 'install_update' && !confirm(`确定更新程序至 ${document.querySelector('#latest-version').textContent}？账号和上传文件不受影响。`)) return;
     generation++; submitting = true; busy = true; notice = ''; expectedJob = '';
     check.disabled = true; install.disabled = true; reload.hidden = true;
     showProgress('submitting', {percent: null, label: action === 'check_update' ? '正在提交检查更新任务' : '正在提交程序更新任务', active: true});

@@ -55,6 +55,17 @@ class PackageTests(unittest.TestCase):
     def test_valid_release(self):
         self.assertEqual(worker.validate_release(release_data())["tag"], TAG)
 
+    def test_semantic_version_package_is_compatible_with_installed_worker(self):
+        archive = self.root / 'release.tar.gz'
+        builder.build(ROOT, archive, TAG, SHA)
+        destination = self.root / 'versioned'
+        destination.mkdir()
+        worker.extract_package(archive, destination)
+        worker.validate_manifest(destination, TAG)
+        manifest = json.loads((destination / 'release.json').read_text())
+        self.assertEqual(manifest['version'], 'v1.0.0')
+        self.assertEqual((destination / 'deploy/version.txt').read_text().strip(), 'v1.0.0')
+
     def test_invalid_tag(self):
         for tag in ["../etc", "main", "build-1-1\n", "build-1-1;sh"]:
             with self.subTest(tag=tag), self.assertRaises(RuntimeError):

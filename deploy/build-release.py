@@ -13,6 +13,9 @@ def build(root, output, tag, commit):
     if not re.fullmatch(r"build-[0-9]+-[0-9]+", tag) or not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError("Invalid release identity")
     root = Path(root)
+    version = (root / 'deploy/version.txt').read_text(encoding='utf-8').strip()
+    if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', version):
+        raise ValueError('Invalid program version')
     paths = []
     for folder in ["public", "src", "bin", "deploy", "tests"]:
         for path in (root / folder).rglob("*"):
@@ -24,7 +27,7 @@ def build(root, output, tag, commit):
     with tarfile.open(output, "w:gz") as package:
         for path in sorted(paths):
             package.add(path, arcname=path.relative_to(root).as_posix(), recursive=False)
-        generated = {".release": tag + "\n", "release.json": json.dumps({"protocol": 1, "repository": "52okp/52okp-oss", "tag": tag, "commit": commit})}
+        generated = {".release": tag + "\n", "release.json": json.dumps({"protocol": 1, "repository": "52okp/52okp-oss", "tag": tag, "version": version, "commit": commit})}
         for name, text in generated.items():
             data = text.encode("utf-8")
             info = tarfile.TarInfo(name)
