@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const script = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
+const script = fs.readFileSync(path.join(__dirname, '../public/update.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const details = {
   idle: [0, '等待开始', false], queued: [10, '已提交，等待本地服务处理', true],

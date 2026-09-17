@@ -20,7 +20,7 @@ jobs:
       - run: php tests/check.php
       - run: php -d disable_functions=putenv tests/check.php
       - run: php tests/http.php
-      - run: node --test tests/update-ui.test.cjs
+      - run: node --test tests/*.test.cjs
       - run: python3 -B -m unittest discover -s tests -p 'test_*.py' -v
       - run: bash -n deploy/setup.sh deploy/install-updater.sh deploy/bootstrap-web-update.sh
   publish:

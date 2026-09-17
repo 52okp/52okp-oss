@@ -39,6 +39,8 @@ try {
     [$status, $page] = request('GET', '/'); $token = csrf($page);
     assertHttp(str_contains($page, '文件列表'), '登录可见后台');
     assertHttp(str_contains($page, '程序更新'), '后台包含程序更新区');
+    assertHttp(str_contains($page, '52okp') && str_contains($page, 'id="dropzone"') && str_contains($page, 'id="file-search"') && str_contains($page, 'id="page-size"'), '新后台包含品牌、拖拽上传、搜索和分页');
+    assertHttp(str_contains($page, 'id="settings-view"') && !str_contains($page, '共 512 MB'), '系统信息只读且不虚构总容量');
     assertHttp(str_contains($page, 'id="update-progress"') && str_contains($page, 'id="update-stage"'), '后台包含更新任务进度条及阶段反馈');
     assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'check_update']))[0] === 400, '更新服务未连接时拒绝请求');
     file_put_contents("$scratch/updater/enabled", '');
@@ -72,6 +74,8 @@ try {
     assertHttp(request('POST', '/', $body, "multipart/form-data; boundary=$boundary")[0] === 302, '同名再次上传');
     $files = json_decode(file_get_contents("$scratch/metadata/files.json"), true, 512, JSON_THROW_ON_ERROR);
     assertHttp(count($files) === 2, '同名上传互不覆盖'); $id = array_key_first($files);
+    [$status, $listedPage] = request('GET', '/');
+    assertHttp(substr_count($listedPage, 'class="file-row"') === 2 && str_contains($listedPage, 'data-name="test.apk"'), '已上传文件在新表格中真实显示');
     assertHttp(file_get_contents("$scratch/uploads/$id") === 'hello-update', '上传内容一致');
     [$status, , $headers] = request('GET', "/d/$id", '', 'application/x-www-form-urlencoded', false);
     assertHttp($status === 200 && str_contains($headers, "X-Accel-Redirect: /_files/$id"), '匿名下载交给Nginx');

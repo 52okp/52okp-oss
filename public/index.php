@@ -89,25 +89,4 @@ try {
 }
 $files = !empty($_SESSION['admin']) ? transaction('files', fn(&$data) => array_reverse($data, true), false) : [];
 $updates = !empty($_SESSION['admin']) ? updateStatus() : [];
-$assetVersion = substr(hash_file('sha256', __DIR__ . '/app.js'), 0, 12);
-?>
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>文件云存储</title><link rel="stylesheet" href="/style.css?v=<?=h($assetVersion)?>"><script src="/app.js?v=<?=h($assetVersion)?>" defer></script></head><body><main><h1>文件云存储</h1><p class="error"><?=h($error)?></p>
-<?php function token(): void { echo '<input type="hidden" name="csrf" value="' . h($_SESSION['csrf']) . '">'; } ?>
-<?php if (empty($_SESSION['admin'])): ?>
-<form method="post"><?php token(); ?><input type="hidden" name="action" value="login"><label>账号<input name="username" required autocomplete="username"></label><label>密码<input type="password" name="password" required autocomplete="current-password"></label><button>登录</button></form>
-<?php else: ?>
-<form method="post"><?php token(); ?><button name="action" value="logout">退出登录</button></form>
-<?php $updateState = $updates['state']; $updateProgress = $updateState['progress']; $latestTag = (string)($updateState['latest']['tag'] ?? ''); $updateBusy = $updateProgress['active']; ?>
-<section id="updates"><h2>程序更新</h2><p>当前版本：<span id="current-version"><?=h($updates['current_version'])?></span></p><p>最新版本：<span id="latest-version"><?=h($updateState['latest_version'] ?: '请先检查更新')?></span></p>
-<div id="update-task" aria-busy="<?= $updateBusy ? 'true' : 'false' ?>">
-<div class="update-progress-heading"><span id="update-stage"><?=h($updateProgress['label'])?></span><span id="update-percent"><?= $updateProgress['percent'] === null ? '处理中' : h((string)$updateProgress['percent']) . '%' ?></span></div>
-<progress id="update-progress" max="100"<?= $updateProgress['percent'] === null ? '' : ' value="' . h((string)$updateProgress['percent']) . '"' ?> aria-label="程序更新任务阶段进度"></progress>
-<p id="update-message" role="status" aria-live="polite"><?=h($updates['connected'] ? (string)($updateState['message'] ?? '更新服务已连接，点击检查更新获取发布版本') : '更新服务未连接，请先安装或启动本地更新服务')?></p>
-<p class="update-detail"><span id="update-elapsed"></span><span id="update-job"><?=h(isset($updateState['job']) ? '任务编号：' . $updateState['job'] : '')?></span></p>
-</div>
-<form id="update-form" method="post"><?php token(); ?><input type="hidden" id="update-tag" name="tag" value="<?=h($latestTag)?>"><button name="action" value="check_update" id="check-update"<?= $updates['connected'] && !$updateBusy ? '' : ' disabled' ?>>检查更新</button><button name="action" value="install_update" id="install-update"<?= $updates['connected'] && !$updateBusy && $latestTag !== '' && $latestTag !== $updates['current'] ? '' : ' disabled' ?>>更新程序</button><button type="button" id="refresh-update-status">刷新状态</button></form><p class="update-detail">进度按任务阶段显示，不是文件下载百分比。连接 GitHub 时显示动态进度，请等待明确的成功或失败结果。</p><p>只更新程序代码，账号和上传文件保持不变。更新失败会尝试自动回滚。</p><noscript><p>JavaScript 未启用。提交后可刷新页面查看任务阶段和结果。</p></noscript></section>
-<section><h2>上传文件</h2><p>上限 <?=h((string)round($config['max_bytes']/1048576))?> MB。直链为公开链接，持有链接即可下载。</p><form id="upload" method="post" enctype="multipart/form-data"><?php token(); ?><input type="hidden" name="action" value="upload"><input type="file" name="file" required><button>上传</button></form><progress id="progress" max="100" value="0"></progress><p id="result" role="status"></p></section>
-<h2>文件列表</h2><?php if (!$files): ?><p>暂无文件</p><?php endif; ?>
-<?php foreach ($files as $id => $file): $url = rtrim($config['base_url'], '/') . '/d/' . $id; ?>
-<article><h3><?=h($file['name'])?></h3><p><?=h((string)$file['size'])?> 字节 · <?=h($file['time'])?></p><input readonly value="<?=h($url)?>" aria-label="下载链接"><button type="button" class="copy">复制链接</button><form method="post" class="delete"><?php token(); ?><input type="hidden" name="id" value="<?=h($id)?>"><button name="action" value="delete">删除文件</button></form></article>
-<?php endforeach; endif; ?></main></body></html>
+require dirname(__DIR__) . '/src/view.php';

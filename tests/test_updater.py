@@ -63,8 +63,9 @@ class PackageTests(unittest.TestCase):
         worker.extract_package(archive, destination)
         worker.validate_manifest(destination, TAG)
         manifest = json.loads((destination / 'release.json').read_text())
-        self.assertEqual(manifest['version'], 'v1.0.0')
-        self.assertEqual((destination / 'deploy/version.txt').read_text().strip(), 'v1.0.0')
+        expected_version = (ROOT / 'deploy/version.txt').read_text().strip()
+        self.assertEqual(manifest['version'], expected_version)
+        self.assertEqual((destination / 'deploy/version.txt').read_text().strip(), expected_version)
 
     def test_invalid_tag(self):
         for tag in ["../etc", "main", "build-1-1\n", "build-1-1;sh"]:

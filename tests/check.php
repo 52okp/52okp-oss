@@ -12,6 +12,7 @@ $hash = password_hash('testing-password-only', PASSWORD_DEFAULT);
 check(password_verify('testing-password-only', $hash), '密码哈希');
 check(!password_verify('wrong', $hash), '错误密码');
 check(is_file(dirname(__DIR__) . '/public/index.php'), '入口存在');
+foreach (['src/view.php', 'public/cloud.css', 'public/update.js', 'public/dashboard.js'] as $asset) check(is_file(dirname(__DIR__) . '/' . $asset), '后台资源存在：' . $asset);
 require dirname(__DIR__) . '/src/updater.php';
 check(updateVersionLabel('v1.0.0', 'build-1-1') === 'v1.0.0', '语义版本展示');
 check(updateVersionLabel('程序更新 build-1-1', 'build-1-1') === 'build-1-1', '旧发布版本展示兼容');
