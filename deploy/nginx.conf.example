@@ -1,0 +1,23 @@
+# 放入宝塔网站 HTTPS server 块，保留宝塔证书配置。
+root /www/wwwroot/app_52okp_com/current/public;
+index index.php;
+client_max_body_size 520m;
+client_body_timeout 300s;
+location / { try_files $uri /index.php$is_args$args; }
+location = /index.php {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+    fastcgi_param OSS_CONFIG /www/wwwroot/app_52okp_com/shared/config/config.php;
+    fastcgi_pass unix:/tmp/php-cgi-85.sock; # 按宝塔实际 PHP 8.5 socket 修改
+    fastcgi_read_timeout 300s;
+}
+location /_files/ {
+    internal;
+    alias /www/wwwroot/app_52okp_com/shared/uploads/;
+    default_type application/octet-stream;
+    autoindex off;
+    add_header X-Content-Type-Options nosniff always;
+}
+location ~ \.php(?:/|$) { return 404; }
+location ~ /\. { deny all; }
+# 删除宝塔原有通用 PHP location，避免冲突。HTTP server 只做 HTTPS 跳转。

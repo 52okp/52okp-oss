@@ -1,0 +1,53 @@
+name: Validate and deploy
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: fileinfo
+      - run: find . -name '*.php' -not -path './shared/*' -print0 | xargs -0 -n1 php -l
+      - run: php tests/check.php
+      - run: php tests/http.php
+      - run: bash -n deploy/setup.sh deploy/release.sh
+  deploy:
+    needs: validate
+    if: github.ref_name == github.event.repository.default_branch && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package code only
+        run: tar -czf release.tar.gz public src bin tests deploy config.example.php README.md
+      - name: SSH release
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          PHP_BIN: ${{ vars.PHP_BIN }}
+          HEALTH_URL: ${{ vars.HEALTH_URL }}
+          RELEASE: ${{ github.run_id }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$SSH_PORT" =~ ^[0-9]+$ && "$SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ && "$SSH_USER" != root ]]
+          [[ "$DEPLOY_ROOT" =~ ^/www/wwwroot/[a-zA-Z0-9_-]+$ && "$PHP_BIN" =~ ^/[a-zA-Z0-9/_.-]+$ && "$HEALTH_URL" =~ ^https://[a-zA-Z0-9.-]+/health$ ]]
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          scp -o StrictHostKeyChecking=yes -P "$SSH_PORT" release.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_ROOT/$RELEASE.tar.gz"
+          ssh -o StrictHostKeyChecking=yes -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -s -- '$DEPLOY_ROOT' '$RELEASE' '$PHP_BIN' '$HEALTH_URL'" < deploy/release.sh
