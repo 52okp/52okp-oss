@@ -20,10 +20,13 @@ function fixture(mode) {
       row.querySelector = () => ({dateTime:row.dataset.time}); return row;
     });
     node('file-rows').children = rows; nodes['file-rows'].querySelectorAll = () => rows;
-    for (const id of ['file-search','file-type','file-sort','page-size','empty-files','empty-files h3','list-count','page-label','previous-page','next-page']) node(id);
+    for (const id of ['file-search','file-type','file-sort','page-size','empty-files','empty-files h3','list-count','page-label','previous-page','next-page','project-filter','platform-filter']) node(id);
+    nodes['project-filter'].value = 'all'; nodes['platform-filter'].value = 'all';
+    rows.forEach((row,index) => { row.dataset.project = index === 0 ? '' : index % 2 ? '项目A' : '项目B'; row.dataset.platform = index === 0 ? '' : index % 2 ? 'android' : 'windows'; });
     nodes['file-type'].value = 'all'; nodes['file-sort'].value = 'newest'; nodes['page-size'].value = '10';
   } else {
-    for (const id of ['upload','upload-file','dropzone','upload-button','upload-queue','result','selected-files']) node(id);
+    for (const id of ['upload','upload-file','dropzone','upload-button','upload-queue','result','selected-files','upload-project','upload-platform','upload-version']) node(id);
+    nodes['upload-project'].value = '项目A'; nodes['upload-platform'].value = 'windows';
     nodes.upload.dataset.maxBytes = '100'; nodes['upload-file'].files = [];
   }
   class XHR {
@@ -55,9 +58,12 @@ test('多文件逐个上传且重复提交不会启动第二队列', async () =>
   const {nodes:n,requests:r} = fixture('upload');
   n['upload-file'].files=[{name:'a.txt',size:10},{name:'b.txt',size:20}]; await n['upload-file'].fire('change');
   const submitting=n.upload.fire('submit'); assert.equal(r.length,1);
+  assert.equal(r[0].body.fields.project,'项目A'); assert.equal(r[0].body.fields.version,'');
+  n['upload-project'].value='项目B';
   await n.upload.fire('submit'); assert.equal(r.length,1);
   r[0].status=200; r[0].responseText=JSON.stringify({url:'https://example.com/d/a'}); r[0].onload(); await flush();
   assert.equal(r.length,2); assert.equal(r[1].body.fields.file.name,'b.txt');
+  assert.equal(r[1].body.fields.project,'项目A');
   r[1].status=200; r[1].responseText=JSON.stringify({url:'https://example.com/d/b'}); r[1].onload(); await submitting;
   assert.match(n.result.textContent,/2 个成功/); assert.equal(n['upload-button'].disabled,false);
 });
@@ -68,4 +74,11 @@ test('超大文件拒绝但继续上传下一文件，错误响应不标成功',
   r[0].status=413; r[0].responseText='too large'; r[0].onload(); await submitting;
   assert.match(n.result.textContent,/0 个成功/); assert.equal(n['upload-queue'].children[0].dataset.state,'failed');
   assert.equal(n['upload-queue'].children[1].dataset.state,'failed');
+});
+test('项目与平台联合筛选，旧文件可通过未分类入口查找', async () => {
+  const {nodes:n} = fixture('table'); n['project-filter'].value='project:项目A'; await n['project-filter'].fire('change');
+  assert.ok(n['file-rows'].children.filter(row=>!row.hidden).every(row=>row.dataset.project==='项目A'));
+  n['platform-filter'].value='windows'; await n['platform-filter'].fire('change'); assert.equal(n['empty-files'].hidden,false);
+  n['project-filter'].value='unclassified'; n['platform-filter'].value='all'; await n['project-filter'].fire('change');
+  assert.equal(n['file-rows'].children.filter(row=>!row.hidden).length,1);
 });

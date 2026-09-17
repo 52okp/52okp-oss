@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/src/bootstrap.php';
 require dirname(__DIR__) . '/src/updater.php';
+require dirname(__DIR__) . '/src/categories.php';
 header('X-Content-Type-Options: nosniff');
 $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($route === '/health') {
@@ -59,6 +60,7 @@ try {
             }
             if ($action === 'logout') { $_SESSION = []; session_destroy(); header('Location: /'); exit; }
             if ($action === 'upload') {
+                $category = fileCategory($_POST);
                 $upload = $_FILES['file'] ?? null;
                 if (!$upload || $upload['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('上传失败，请检查文件大小及服务器限制');
                 $size = filesize($upload['tmp_name']);
@@ -68,9 +70,17 @@ try {
                 $id = bin2hex(random_bytes(32));
                 if (!move_uploaded_file($upload['tmp_name'], "$root/uploads/$id")) throw new RuntimeException('无法保存文件');
                 if (!chmod("$root/uploads/$id", 0640)) { unlink("$root/uploads/$id"); throw new RuntimeException('无法设置文件权限'); }
-                try { transaction('files', function (&$files) use ($id, $name, $size) { $files[$id] = ['name' => $name, 'size' => $size, 'time' => gmdate('c')]; }); }
+                try { transaction('files', function (&$files) use ($id, $name, $size, $category) { $files[$id] = ['name' => $name, 'size' => $size, 'time' => gmdate('c')] + $category; }); }
                 catch (Throwable $e) { unlink("$root/uploads/$id"); throw $e; }
                 if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') { header('Content-Type: application/json'); echo json_encode(['url' => rtrim($config['base_url'], '/') . '/d/' . $id]); exit; }
+            } elseif ($action === 'classify') {
+                $id = (string)($_POST['id'] ?? '');
+                if (!preg_match('/^[a-f0-9]{64}$/D', $id)) fail(400, '无效标识');
+                $category = fileCategory($_POST);
+                transaction('files', function (&$files) use ($id, $category) {
+                    if (!isset($files[$id])) throw new RuntimeException('文件不存在');
+                    $files[$id] = array_replace($files[$id], $category);
+                });
             } elseif ($action === 'delete') {
                 $id = (string)($_POST['id'] ?? '');
                 if (!preg_match('/^[a-f0-9]{64}$/D', $id)) fail(400, '无效标识');

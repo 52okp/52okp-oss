@@ -15,10 +15,13 @@ if (rowsContainer) {
   const rows = [...rowsContainer.querySelectorAll('.file-row')];
   const search = document.querySelector('#file-search'); const type = document.querySelector('#file-type');
   const sort = document.querySelector('#file-sort'); const size = document.querySelector('#page-size'); let page = 1;
+  const project = document.querySelector('#project-filter'); const platform = document.querySelector('#platform-filter');
   function renderFiles(reset = false) {
     if (reset) page = 1;
     const query = search.value.trim().toLocaleLowerCase();
-    const filtered = rows.filter(row => row.dataset.name.toLocaleLowerCase().includes(query) && (type.value === 'all' || row.dataset.type === type.value));
+    const filtered = rows.filter(row => row.dataset.name.toLocaleLowerCase().includes(query) && (type.value === 'all' || row.dataset.type === type.value)
+      && (!project || project.value === 'all' || (project.value === 'unclassified' ? !row.dataset.project : 'project:' + row.dataset.project === project.value))
+      && (!platform || platform.value === 'all' || row.dataset.platform === platform.value));
     filtered.sort((a, b) => {
       if (sort.value === 'name') return a.dataset.name.localeCompare(b.dataset.name, 'zh-CN', {numeric: true});
       if (sort.value === 'largest') return Number(b.dataset.size) - Number(a.dataset.size);
@@ -29,12 +32,13 @@ if (rowsContainer) {
     filtered.forEach((row, index) => { rowsContainer.append(row); row.hidden = index < (page - 1) * pageSize || index >= page * pageSize; });
     document.querySelector('#empty-files').hidden = filtered.length !== 0;
     document.querySelector('#empty-files h3').textContent = rows.length ? '没有找到匹配的文件' : '暂无文件';
-    document.querySelector('#list-count').textContent = `共 ${filtered.length} 条记录${query || type.value !== 'all' ? `（全部 ${rows.length} 条）` : ''}`;
+    document.querySelector('#list-count').textContent = `共 ${filtered.length} 条记录${query || type.value !== 'all' || (project && project.value !== 'all') || (platform && platform.value !== 'all') ? `（全部 ${rows.length} 条）` : ''}`;
     document.querySelector('#page-label').textContent = `${page} / ${pages}`;
     document.querySelector('#previous-page').disabled = page === 1; document.querySelector('#next-page').disabled = page === pages;
   }
   search.addEventListener('input', () => renderFiles(true));
   [type, sort, size].forEach(input => input.addEventListener('change', () => renderFiles(true)));
+  [project, platform].filter(Boolean).forEach(input => input.addEventListener('change', () => renderFiles(true)));
   document.querySelector('#previous-page').addEventListener('click', () => { page--; renderFiles(); });
   document.querySelector('#next-page').addEventListener('click', () => { page++; renderFiles(); });
   rows.forEach(row => { const time = row.querySelector('time'); const date = new Date(time.dateTime); if (!Number.isNaN(date.getTime())) { time.textContent = date.toLocaleString('zh-CN', {hour12: false}); time.title = `本地时间 · ${time.dateTime}`; } });
@@ -46,6 +50,8 @@ if (uploadForm) {
   const button = document.querySelector('#upload-button'); const queue = document.querySelector('#upload-queue');
   const result = document.querySelector('#result'); const limit = Number(uploadForm.dataset.maxBytes);
   let selection = []; let uploading = false;
+  let category = {};
+  const categoryFields = ['project', 'platform', 'version'].map(name => document.querySelector('#upload-' + name)).filter(Boolean);
   function formatBytes(value) { return value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1048576).toFixed(1)} MB`; }
   function select(files) { if (uploading) return; selection = [...files]; document.querySelector('#selected-files').textContent = selection.length ? `已选择 ${selection.length} 个文件 · ${formatBytes(selection.reduce((total, file) => total + file.size, 0))}` : '尚未选择文件'; }
   input.addEventListener('change', () => select(input.files));
@@ -75,16 +81,21 @@ if (uploadForm) {
         const link = document.createElement('a'); link.href = url.href; link.textContent = '下载文件'; item.append(copy, link); resolve(true);
       };
       xhr.onerror = () => fail('网络异常，请刷新列表确认结果，不要重复上传'); xhr.ontimeout = () => fail('上传超时，请刷新列表确认结果'); xhr.onabort = () => fail('上传已中断，请刷新列表确认结果');
-      const body = new FormData(uploadForm); body.set('file', file); xhr.send(body);
+      const body = new FormData(uploadForm); body.set('file', file);
+      for (const [key, value] of Object.entries(category)) body.set(key, value);
+      xhr.send(body);
     });
   }
   uploadForm.addEventListener('submit', async event => {
     event.preventDefault(); if (uploading || !selection.length) return;
+    category = Object.fromEntries(['project', 'platform', 'version'].map(name => [name, document.querySelector('#upload-' + name)?.value || '']));
+    categoryFields.forEach(field => { field.disabled = true; });
     uploading = true; button.disabled = true; input.disabled = true; button.textContent = '上传中…'; queue.replaceChildren(); result.textContent = '请保持页面打开，文件将逐个上传。'; let completed = 0;
     try { for (const file of selection) { if (await upload(file)) completed++; } }
     catch { result.textContent = '上传过程异常，请刷新列表确认已上传的文件。'; }
     finally {
       uploading = false; button.disabled = false; input.disabled = false; button.textContent = '开始上传'; result.textContent = `处理完成：${completed} 个成功，${selection.length - completed} 个未确认或失败。`;
+      categoryFields.forEach(field => { field.disabled = false; });
       const refresh = document.createElement('a'); refresh.href = '/#file-list'; refresh.textContent = '刷新文件列表与统计'; result.append(' ', refresh);
       selection = []; input.value = ''; input.required = true; document.querySelector('#selected-files').textContent = '尚未选择文件';
     }

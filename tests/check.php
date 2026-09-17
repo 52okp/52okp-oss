@@ -14,6 +14,13 @@ check(!password_verify('wrong', $hash), '错误密码');
 check(is_file(dirname(__DIR__) . '/public/index.php'), '入口存在');
 foreach (['src/view.php', 'public/cloud.css', 'public/update.js', 'public/dashboard.js'] as $asset) check(is_file(dirname(__DIR__) . '/' . $asset), '后台资源存在：' . $asset);
 require dirname(__DIR__) . '/src/updater.php';
+require dirname(__DIR__) . '/src/categories.php';
+check(fileCategory(['project' => '测试项目', 'platform' => 'mac_apple'])['version'] === '', '分类版本号选填');
+foreach (array_keys(FILE_PLATFORMS) as $platform) check(fileCategory(['project' => '项目', 'platform' => $platform])['platform'] === $platform, '平台分类：' . $platform);
+foreach ([['project' => '', 'platform' => 'windows'], ['project' => '项目', 'platform' => '../ios'], ['project' => [], 'platform' => 'ios'], ['project' => "项目\n名称", 'platform' => 'ios']] as $invalid) {
+    $rejected = false; try { fileCategory($invalid); } catch (RuntimeException $e) { $rejected = true; }
+    check($rejected, '分类无效输入被拒绝');
+}
 check(updateVersionLabel('v1.0.0', 'build-1-1') === 'v1.0.0', '语义版本展示');
 check(updateVersionLabel('程序更新 build-1-1', 'build-1-1') === 'build-1-1', '旧发布版本展示兼容');
 $scratch = sys_get_temp_dir() . '/oss-test-' . bin2hex(random_bytes(12));
