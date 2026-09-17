@@ -24,7 +24,30 @@ function updateStatus(): array {
     $heartbeat = updateRead('heartbeat');
     $enabled = is_file("$root/updater/enabled");
     $current = is_file(dirname(__DIR__) . '/.release') ? trim(file_get_contents(dirname(__DIR__) . '/.release')) : 'manual';
+    // The installed v1 worker only reports phase names. Derive progress without upgrading it.
+    $task = updateRead('task');
+    $request = updateRead('request') ?: updateRead('running');
+    $matching = ($task['id'] ?? '') !== '' && ($task['id'] ?? '') === ($state['job'] ?? '');
+    $state['task'] = $matching ? ($task['type'] ?? '') : ($request['type'] ?? '');
+    $state['started'] = $matching ? ($task['started'] ?? 0) : ($state['updated'] ?? 0);
+    $state['progress'] = updateProgress((string)($state['phase'] ?? 'idle'));
     return ['enabled' => $enabled, 'connected' => $enabled && ($heartbeat['at'] ?? 0) > time() - 180, 'current' => $current, 'state' => $state];
+}
+
+function updateProgress(string $phase): array {
+    $stages = [
+        'idle' => [0, '等待开始', false],
+        'queued' => [10, '已提交，等待本地服务处理', true],
+        'checking' => [null, '正在连接 GitHub、查询最新版本', true],
+        'downloading' => [25, '正在下载并校验发布包', true],
+        'validating' => [60, '正在解压、检查代码和运行测试', true],
+        'switching' => [85, '正在切换版本并检查网站健康状态', true],
+        'checked' => [100, '版本检查完成', false],
+        'success' => [100, '程序更新完成', false],
+        'failed' => [0, '任务失败，请查看错误信息', false],
+    ];
+    [$percent, $label, $active] = $stages[$phase] ?? [0, '状态未知，请刷新状态', false];
+    return ['percent' => $percent, 'label' => $label, 'active' => $active];
 }
 
 function updateSubmit(string $type, string $tag = ''): string {
@@ -42,6 +65,7 @@ function updateSubmit(string $type, string $tag = ''): string {
         if ($type === 'install' && ($state['latest']['tag'] ?? '') !== $tag) throw new RuntimeException('版本信息已变化，请重新检查更新');
         if ($type === 'install' && $tag === $status['current']) throw new RuntimeException('当前已经是该版本');
         $id = bin2hex(random_bytes(16));
+        updateWrite('task', ['id' => $id, 'type' => $type, 'started' => time()]);
         updateWrite('request', ['id' => $id, 'type' => $type, 'tag' => $tag]);
         updateWrite('status', ['job' => $id, 'phase' => 'queued', 'message' => '请求已提交，等待本地服务处理', 'updated' => time(), 'latest' => $state['latest'] ?? null]);
         return $id;
