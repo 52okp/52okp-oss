@@ -66,6 +66,11 @@ class PackageTests(unittest.TestCase):
         expected_version = (ROOT / 'deploy/version.txt').read_text().strip()
         self.assertEqual(manifest['version'], expected_version)
         self.assertEqual((destination / 'deploy/version.txt').read_text().strip(), expected_version)
+        for asset in ['cloud.css', 'update.js', 'dashboard.js']:
+            data = (ROOT / 'public' / asset).read_bytes()
+            path = Path(asset)
+            name = path.stem + '.' + hashlib.sha256(data).hexdigest()[:16] + path.suffix
+            self.assertEqual((destination / 'public' / name).read_bytes(), data)
 
     def test_invalid_tag(self):
         for tag in ["../etc", "main", "build-1-1\n", "build-1-1;sh"]:

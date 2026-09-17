@@ -25,7 +25,12 @@ function icon(string $name): void {
     echo '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' . ($paths[$name] ?? $paths['file']) . '"></path></svg>';
 }
 $loggedIn = !empty($_SESSION['admin']);
-$assetVersion = substr(hash('sha256', hash_file('sha256', __DIR__ . '/../public/update.js') . hash_file('sha256', __DIR__ . '/../public/dashboard.js') . hash_file('sha256', __DIR__ . '/../public/cloud.css')), 0, 12);
+function assetUrl(string $name): string {
+    $digest = substr(hash_file('sha256', __DIR__ . '/../public/' . $name), 0, 16);
+    $fingerprint = pathinfo($name, PATHINFO_FILENAME) . '.' . $digest . '.' . pathinfo($name, PATHINFO_EXTENSION);
+    // Release packages contain fingerprinted files; source checkouts retain a dev fallback.
+    return is_file(__DIR__ . '/../public/' . $fingerprint) ? '/' . $fingerprint : '/' . $name . '?v=' . $digest;
+}
 $projects = array_values(array_unique(array_filter(array_column($files, 'project'), fn($name) => $name !== '')));
  natcasesort($projects);
 $totalBytes = array_sum(array_column($files, 'size'));
@@ -38,7 +43,7 @@ if ($loggedIn) {
 }
 ?>
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>52okp Cloud · 文件云存储</title><link rel="stylesheet" href="/cloud.css?v=<?=h($assetVersion)?>"><script src="/update.js?v=<?=h($assetVersion)?>" defer></script><script src="/dashboard.js?v=<?=h($assetVersion)?>" defer></script></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>52okp Cloud · 文件云存储</title><link rel="stylesheet" href="<?=h(assetUrl('cloud.css'))?>"><script src="<?=h(assetUrl('update.js'))?>" defer></script><script src="<?=h(assetUrl('dashboard.js'))?>" defer></script></head>
 <body>
 <header class="topbar"><div class="topbar-inner"><a href="/" class="brand"><?php icon('cloud'); ?><span><strong>52okp</strong> Cloud</span></a>
 <?php if ($loggedIn): ?>

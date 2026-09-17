@@ -2,6 +2,7 @@
 """Build a code-only package. Never includes .git, shared, secrets or server config."""
 from __future__ import annotations
 import argparse
+import hashlib
 import io
 import json
 import re
@@ -27,6 +28,14 @@ def build(root, output, tag, commit):
     with tarfile.open(output, "w:gz") as package:
         for path in sorted(paths):
             package.add(path, arcname=path.relative_to(root).as_posix(), recursive=False)
+        for asset in ['cloud.css', 'update.js', 'dashboard.js']:
+            data = (root / 'public' / asset).read_bytes()
+            filename = Path(asset)
+            digest = hashlib.sha256(data).hexdigest()[:16]
+            info = tarfile.TarInfo('public/' + filename.stem + '.' + digest + filename.suffix)
+            info.size = len(data)
+            info.mode = 0o640
+            package.addfile(info, io.BytesIO(data))
         generated = {".release": tag + "\n", "release.json": json.dumps({"protocol": 1, "repository": "52okp/52okp-oss", "tag": tag, "version": version, "commit": commit})}
         for name, text in generated.items():
             data = text.encode("utf-8")
