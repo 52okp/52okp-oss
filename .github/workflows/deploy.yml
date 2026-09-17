@@ -1,17 +1,17 @@
-name: Validate and deploy
+name: Validate and publish update
 on:
   push:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: production
+  group: update-publish
   cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
@@ -19,35 +19,25 @@ jobs:
       - run: find . -name '*.php' -not -path './shared/*' -print0 | xargs -0 -n1 php -l
       - run: php tests/check.php
       - run: php tests/http.php
-      - run: bash -n deploy/setup.sh deploy/release.sh
-  deploy:
+      - run: python3 -B -m unittest discover -s tests -p 'test_*.py' -v
+      - run: bash -n deploy/setup.sh deploy/install-updater.sh deploy/bootstrap-web-update.sh
+  publish:
     needs: validate
-    if: github.ref_name == github.event.repository.default_branch && vars.DEPLOY_ENABLED == 'true'
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    environment: production
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Package code only
-        run: tar -czf release.tar.gz public src bin tests deploy config.example.php README.md
-      - name: SSH release
+      - uses: actions/checkout@v5
+      - name: Build code-only package
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
-          PHP_BIN: ${{ vars.PHP_BIN }}
-          HEALTH_URL: ${{ vars.HEALTH_URL }}
-          RELEASE: ${{ github.run_id }}-${{ github.run_attempt }}
-        shell: bash
+          TAG: build-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python3 -B deploy/build-release.py --tag "$TAG" --commit "$GITHUB_SHA" --output 52okp-oss.tar.gz
+      - name: Publish tested update (no production deployment)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: build-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$SSH_PORT" =~ ^[0-9]+$ && "$SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ && "$SSH_USER" != root ]]
-          [[ "$DEPLOY_ROOT" =~ ^/www/wwwroot/[a-zA-Z0-9_-]+$ && "$PHP_BIN" =~ ^/[a-zA-Z0-9/_.-]+$ && "$HEALTH_URL" =~ ^https://[a-zA-Z0-9.-]+/health$ ]]
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-          scp -o StrictHostKeyChecking=yes -P "$SSH_PORT" release.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_ROOT/$RELEASE.tar.gz"
-          ssh -o StrictHostKeyChecking=yes -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -s -- '$DEPLOY_ROOT' '$RELEASE' '$PHP_BIN' '$HEALTH_URL'" < deploy/release.sh
+          gh release create "$TAG" 52okp-oss.tar.gz --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "程序更新 $TAG" --notes "已通过 PHP 8.5 及更新安全测试。提交：$GITHUB_SHA。管理员在后台点击更新后才上线。"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

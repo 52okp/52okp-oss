@@ -1,3 +1,6 @@
 /shared/
 /.env
 *.log
+__pycache__/
+*.pyc
+52okp-oss.tar.gz

@@ -3,7 +3,7 @@ declare(strict_types=1);
 // PHP HTTP集成测试；X-Accel文件内容/Range需在真实Nginx另验。
 $scratch = sys_get_temp_dir() . '/oss-http-' . bin2hex(random_bytes(12));
 mkdir($scratch, 0700);
-foreach (['config', 'uploads', 'metadata', 'sessions'] as $dir) mkdir("$scratch/$dir", 0700);
+foreach (['config', 'uploads', 'metadata', 'sessions', 'updater'] as $dir) mkdir("$scratch/$dir", 0700);
 $process = null; $pipes = []; $cookie = '';
 function assertHttp(bool $value, string $name): void { if (!$value) throw new RuntimeException($name); echo "PASS $name\n"; }
 function request(string $method, string $path, string $body = '', string $type = 'application/x-www-form-urlencoded', bool $useCookie = true): array {
@@ -30,6 +30,7 @@ try {
     for ($i = 0; $i < 50; $i++) { $connection = @fsockopen('127.0.0.1', $port); if ($connection) { fclose($connection); break; } usleep(100000); }
     [$status, $page] = request('GET', '/');
     assertHttp($status === 200 && !str_contains($page, '文件列表'), '匿名只显示登录');
+    assertHttp(request('GET', '/?api=updates')[0] === 401, '匿名不能查看更新状态');
     $token = csrf($page);
     assertHttp(request('POST', '/', 'action=upload')[0] === 403, '缺失CSRF被拒绝');
     assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'delete', 'id' => str_repeat('a', 64)]))[0] === 401, '匿名管理被拒绝');
@@ -37,6 +38,23 @@ try {
     assertHttp($status === 302, '管理员登录');
     [$status, $page] = request('GET', '/'); $token = csrf($page);
     assertHttp(str_contains($page, '文件列表'), '登录可见后台');
+    assertHttp(str_contains($page, '程序更新'), '后台包含程序更新区');
+    assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'check_update']))[0] === 400, '更新服务未连接时拒绝请求');
+    file_put_contents("$scratch/updater/enabled", '');
+    file_put_contents("$scratch/updater/heartbeat.json", json_encode(['at' => time()]));
+    assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'check_update']))[0] === 302, '检查更新提交到本地队列');
+    $job = json_decode(file_get_contents("$scratch/updater/request.json"), true);
+    assertHttp($job['type'] === 'check' && preg_match('/^[a-f0-9]{32}$/D', $job['id']) === 1, '更新请求只包含任务标识');
+    assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'check_update']))[0] === 400, '重复更新任务被拒绝');
+    unlink("$scratch/updater/request.json");
+    file_put_contents("$scratch/updater/status.json", json_encode(['phase' => 'checked', 'latest' => ['tag' => 'build-12345-1']]));
+    [$status, $state] = request('GET', '/?api=updates');
+    assertHttp($status === 200 && json_decode($state, true)['connected'], '登录可读取更新状态');
+    assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'install_update', 'tag' => '../config']))[0] === 400, '更新版本路径注入被拒绝');
+    assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'install_update', 'tag' => 'build-12345-1']))[0] === 302, '管理员提交已检查版本更新');
+    $job = json_decode(file_get_contents("$scratch/updater/request.json"), true);
+    assertHttp($job['type'] === 'install' && $job['tag'] === 'build-12345-1', '更新请求不接收任意下载地址');
+    unlink("$scratch/updater/request.json");
     $boundary = 'oss-test-boundary';
     $body = "--$boundary\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n$token\r\n--$boundary\r\nContent-Disposition: form-data; name=\"action\"\r\n\r\nupload\r\n--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.apk\"\r\nContent-Type: application/octet-stream\r\n\r\nhello-update\r\n--$boundary--\r\n";
     assertHttp(request('POST', '/', $body, "multipart/form-data; boundary=$boundary")[0] === 302, 'HTTP文件上传');
@@ -57,6 +75,6 @@ try {
 } finally {
     if (is_resource($process)) { proc_terminate($process); foreach ($pipes as $pipe) fclose($pipe); proc_close($process); }
     // 仅清理本次创建的随机测试目录，不使用外部配置路径。
-    foreach (['config', 'uploads', 'metadata', 'sessions'] as $dir) { foreach (glob("$scratch/$dir/*") as $file) if (is_file($file)) unlink($file); rmdir("$scratch/$dir"); }
+    foreach (['config', 'uploads', 'metadata', 'sessions', 'updater'] as $dir) { foreach (glob("$scratch/$dir/*") as $file) if (is_file($file)) unlink($file); rmdir("$scratch/$dir"); }
     if (is_file("$scratch/server.log")) unlink("$scratch/server.log"); rmdir($scratch);
 }

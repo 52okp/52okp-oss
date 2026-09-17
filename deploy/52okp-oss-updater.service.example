@@ -1,0 +1,28 @@
+[Unit]
+Description=52okp OSS local program updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+SupplementaryGroups=oss-files
+ExecStart=/usr/bin/python3 -B /usr/local/lib/52okp-oss/update-worker.py /etc/52okp-oss-updater.json
+Restart=on-failure
+RestartSec=5
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@ROOT@
+ReadOnlyPaths=@ROOT@/shared/config @ROOT@/shared/uploads @ROOT@/shared/metadata @ROOT@/shared/sessions
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+TimeoutStopSec=70
+
+[Install]
+WantedBy=multi-user.target
