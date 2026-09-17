@@ -1,0 +1,40 @@
+# PHP 文件云存储
+
+中文管理后台，公开下载直链，不包含 APP 版本管理。目标运行环境 PHP 8.5、Nginx、Linux 宝塔。无数据库或 Composer 依赖。
+
+## 宝塔首次安装
+
+1. 先在宝塔确认 PHP 8.5 实际可用；不可用时不要擅自降级生产环境。安装 Nginx、PHP 8.5，确认 session、json、密码哈希功能；上传需启用 file_uploads。服务器安装 bash、tar、curl、flock 和 SSH。
+2. 创建独立网站，绑定 `app.52okp.com` 并申请 HTTPS 证书；HTTP 跳转 HTTPS。
+3. 将仓库代码先上传到 `/www/wwwroot/app_52okp_com/releases/首次发布标识`（标识格式如 `2026091701-1`）。以 root 执行 `bash deploy/setup.sh /www/wwwroot/app_52okp_com ossdeploy www`。`www` 必须替换为真实 PHP-FPM 用户；Nginx 用户也需要 oss-files 组的读取权限。重新登录部署用户、重启相关服务使权限生效。不要使用 chmod 777。
+4. 将 `config.example.php` 复制到 `/www/wwwroot/app_52okp_com/shared/config/config.php`，模板已设置 `base_url=https://app.52okp.com` 和 `shared=/www/wwwroot/app_52okp_com/shared`，按需调整 max_bytes。文件归 PHP-FPM 用户，权限 0640，组 oss-files。配置不能提交 Git。
+5. 以 PHP-FPM 用户运行初始化（按实际 PHP 路径调整，在首次 release 目录执行）：`sudo -u www env OSS_CONFIG=/www/wwwroot/app_52okp_com/shared/config/config.php /www/server/php/85/bin/php bin/init.php`。密码从交互标准输入读取，不放命令参数；输入前可用 `stty -echo` 隐藏回显，完成后务必 `stty echo`。已有账号不会被覆盖。管理员配置权限 0600，因此部署用户检查文件存在即可，不读取密码。
+6. 在 `/www/wwwroot/app_52okp_com` 下创建 current 符号链接到首次 release，例如 `ln -s releases/2026091701-1 current`。网站根目录设置为 `/www/wwwroot/app_52okp_com/current/public`。参考 `deploy/nginx.conf.example` 修改宝塔 HTTPS server 块，核实 PHP socket，删除重复通用 PHP 规则。宝塔 open_basedir 如开启，必须允许 shared 目录和系统上传临时目录。执行 `nginx -t` 后重载。
+7. PHP 设置 `upload_max_filesize=512M`、`post_max_size=520M`、`max_execution_time=300`、`max_input_time=300`；设置 PHP-FPM 可写的独立 upload_tmp_dir。Nginx `client_max_body_size=520m`，与应用默认 512 MiB 上限留出 multipart 开销。相关代理/CDN也可能有更低限制，必须实测。第一版普通上传，无分片恢复；下载支持断点续传。
+8. 登录并上传小文件与大文件，复制链接；在无痕窗口下载。上传内容以随机无扩展名存储，Nginx internal 目录只作为静态字节返回，不会执行脚本。
+
+## GitHub Actions 自动部署
+
+确认 GitHub 实际默认分支；workflow 自动读取仓库默认分支，不假定 main。所有 push 做验证，只有默认分支允许生产部署；也支持默认分支手动触发。工作流部署串行，服务器还有 flock 防并发。
+
+部署默认关闭：在仓库 Settings → Secrets and variables → Actions → Variables 创建仓库变量 `DEPLOY_ENABLED=true` 才启用部署。此开关必须是仓库变量（不能只放在 production Environment），其他连接参数准备好后再打开。未开启时只运行验证，不连接服务器。
+
+创建独立 SSH 密钥，把公钥安装到 ossdeploy 的 authorized_keys；目录0700、文件0600。不给部署用户 root/sudo 权限。部署用户只需项目代码目录写权限及 shared 配置的读取权限，上传及会话数据由 PHP-FPM 写入。获取主机密钥指纹并通过宝塔终端或可信独立渠道核验后保存完整 known_hosts 行，不能直接盲信 ssh-keyscan 结果。
+
+在 GitHub production Environment 配置 Secrets：SSH_KEY（私钥）、SSH_KNOWN_HOSTS（已核验主机公钥行，非22端口使用 `[host]:port`）、SSH_HOST、SSH_PORT、SSH_USER。Variables：DEPLOY_ROOT（`/www/wwwroot/app_52okp_com`）、PHP_BIN（例如 `/www/server/php/85/bin/php`）、HEALTH_URL（`https://app.52okp.com/health`）。建议开启 Environment 审批及默认分支保护。
+
+首次部署必须先手动完成配置、账号和网站。流程仅打包代码，在新 releases 验证语法和基础测试，原子切换 current 后检查 HTTPS health，失败自动切回之前符号链接。日志在 Actions，失败 release 留在服务器。保留最近5个受管 release及回退版本；清理不会触及 shared。PHP入口使用 realpath 避免 OPcache 同路径缓存；生产仍需按实际 OPcache 设置验证切版行为。
+
+## 验证与备份
+
+本地：`php tests/check.php`、`php tests/http.php`，对全部 PHP 文件执行 `php -l`；CI 使用 PHP 8.5。HTTP集成测试使用独立临时数据和临时服务，结束后自动清理，覆盖登录、CSRF、上传、同名文件、删除及限速。本地 PHP 内置服务器不能处理 X-Accel-Redirect，下载验证必须用上述 Nginx。
+
+Nginx设计依据：[FastCGI响应头处理](https://nginx.org/en/docs/http/ngx_http_fastcgi_module.html#fastcgi_ignore_headers)及[internal location](https://nginx.org/en/docs/http/ngx_http_core_module.html#internal)。请勿配置忽略X-Accel-Redirect；internal目录不能被客户端直接访问。
+
+上线验收：未登录无法管理；错误 CSRF 返回403；5次登录尝试后限速；同名上传生成不同直链；下载文件 SHA256 与原文件一致；`curl -I 直链` 检查HEAD，`curl -H 'Range: bytes=0-9' 直链` 检查206及10字节内容，用 `curl -C - -O 直链` 检查续传。直接访问 `/_files/标识`、配置和元数据必须失败。删除后原直链404。部署前后重复上述测试确认链接和账号保持有效。
+
+手动回滚：以部署用户在项目根目录选择已验证旧版本，创建临时符号链接 `ln -s releases/旧标识 current.rollback`，再 `mv -Tf current.rollback current`；在无并发部署时执行，并检查health和登录下载。绝不能回滚或覆盖shared。
+
+备份整个 shared（含uploads、metadata、config）到加密且受限的异地备份。为确保文件与元数据一致，备份期间暂停管理上传/删除或停止 PHP-FPM，下载可继续。恢复时一起恢复上传及元数据，并还原权限。sessions可不恢复，用户需重新登录。JSON方式适合个人小规模文件列表，操作采用独立锁及原子替换；目录磁盘满时需排查孤立文件，备份不能只取uploads。
+
+尚未连接真实服务器或配置真实 Secrets；完成上述参数后才能验证真实上线及回滚。
