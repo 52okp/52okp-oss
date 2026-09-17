@@ -14,11 +14,9 @@ check(!password_verify('wrong', $hash), '错误密码');
 check(is_file(dirname(__DIR__) . '/public/index.php'), '入口存在');
 $scratch = sys_get_temp_dir() . '/oss-test-' . bin2hex(random_bytes(12));
 mkdir($scratch, 0700); mkdir("$scratch/metadata", 0700);
-$previousConfig = getenv('OSS_CONFIG');
+$root = $scratch;
 try {
-    file_put_contents("$scratch/config.php", '<?php return ' . var_export(['base_url' => 'https://example.com', 'shared' => $scratch, 'max_bytes' => 1024], true) . ';');
-    putenv("OSS_CONFIG=$scratch/config.php");
-    require dirname(__DIR__) . '/src/bootstrap.php';
+    require dirname(__DIR__) . '/src/storage.php';
     transaction('files', function (&$data) { $data['one'] = ['name' => '中文.apk']; });
     transaction('files', function (&$data) { $data['two'] = ['name' => '中文.apk']; });
     $data = transaction('files', fn(&$data) => $data, false);
@@ -30,7 +28,6 @@ try {
     check(count(transaction('files', fn(&$data) => $data, false)) === 1, '异常后锁释放及删除');
     check(h('<script>"') === '&lt;script&gt;&quot;', 'HTML转义');
 } finally {
-    putenv($previousConfig === false ? 'OSS_CONFIG' : "OSS_CONFIG=$previousConfig");
     foreach (['files.json', 'files.json.lock'] as $file) if (is_file("$scratch/metadata/$file")) unlink("$scratch/metadata/$file");
-    unlink("$scratch/config.php"); rmdir("$scratch/metadata"); rmdir($scratch);
+    rmdir("$scratch/metadata"); rmdir($scratch);
 }

@@ -175,7 +175,7 @@ def validate_manifest(destination, tag):
         raise RuntimeError("发布清单无效")
     if (destination / ".release").read_text(encoding="utf-8").strip() != tag:
         raise RuntimeError("发布标识不一致")
-    for required in ["public/index.php", "src/bootstrap.php", "src/updater.php", "tests/check.php"]:
+    for required in ["public/index.php", "src/bootstrap.php", "src/storage.php", "src/updater.php", "tests/check.php"]:
         if not (destination / required).is_file():
             raise RuntimeError("发布包缺少必要程序文件")
     return manifest
