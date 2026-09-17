@@ -38,6 +38,10 @@ function updateStatus(): array {
     $versionPath = dirname(__DIR__) . '/deploy/version.txt';
     $version = is_file($versionPath) ? trim(file_get_contents($versionPath)) : '';
     $state['latest_version'] = updateVersionLabel((string)($state['latest']['name'] ?? ''), (string)($state['latest']['tag'] ?? ''));
+    // Translate legacy worker success messages without changing its installation identity.
+    $displayVersion = updateVersionLabel((string)($state['latest']['name'] ?? ''), '未提供正式版本号');
+    if (($state['phase'] ?? '') === 'checked') $state['message'] = '已获取最新可用版本：' . $displayVersion;
+    if (($state['phase'] ?? '') === 'success') $state['message'] = '程序更新成功：' . $displayVersion;
     return ['enabled' => $enabled, 'connected' => $enabled && ($heartbeat['at'] ?? 0) > time() - 180, 'current' => $current, 'current_version' => updateVersionLabel($version, $current), 'state' => $state];
 }
 

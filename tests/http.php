@@ -57,6 +57,12 @@ try {
     [$status, $state] = request('GET', '/?api=updates');
     assertHttp($status === 200 && json_decode($state, true)['connected'], '登录可读取更新状态');
     assertHttp(json_decode($state, true)['state']['progress']['percent'] === 100, '已安装旧版worker也能显示检查完成进度');
+    foreach (['checked', 'success'] as $phase) {
+        file_put_contents("$scratch/updater/status.json", json_encode(['phase' => $phase, 'message' => 'build-12345-1', 'latest' => ['tag' => 'build-12345-1', 'name' => 'v1.2.1']]));
+        [$status, $state] = request('GET', '/?api=updates');
+        $display = json_decode($state, true)['state'];
+        assertHttp(str_contains($display['message'], 'v1.2.1') && !str_contains($display['message'], 'build-') && $display['latest']['tag'] === 'build-12345-1', '版本提示显示正式版本且保留内部校验标识：' . $phase);
+    }
     file_put_contents("$scratch/updater/status.json", json_encode(['phase' => 'checking', 'job' => $job['id'], 'updated' => time()]));
     [$status, $state] = request('GET', '/?api=updates');
     assertHttp(json_decode($state, true)['state']['progress']['percent'] === null, '连接GitHub阶段采用动态进度而非虚构百分比');
