@@ -1,6 +1,13 @@
 'use strict';
 document.querySelectorAll('.release-token-form').forEach(form => form.addEventListener('submit', event => {
-  if (!confirm('生成新令牌或撤销会使旧令牌立即失效，需要同步更新导航站服务器配置。确定继续？')) event.preventDefault();
+  if (!confirm('生成新令牌或撤销会使该项目旧令牌立即失效，需要同步更新客户端服务器配置。确定继续？')) event.preventDefault();
+}));
+document.querySelectorAll('.release-network-form').forEach(form => form.addEventListener('submit', event => {
+  if (form.dataset.busy) { event.preventDefault(); return; }
+  form.dataset.busy = '1';
+  const feedback = form.querySelector('.release-feedback');
+  if (feedback) feedback.textContent = '正在处理，请稍候。完成后页面自动刷新；超时后请先检查版本列表。';
+  form.setAttribute('aria-busy', 'true');
 }));
 const filesView = document.querySelector('#files-view');
 const settingsView = document.querySelector('#settings-view');

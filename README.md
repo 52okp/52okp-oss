@@ -67,3 +67,18 @@ Nginx设计依据：[FastCGI响应头处理](https://nginx.org/en/docs/http/ngx_
 # 程序版本
 
 对外版本从 `v1.0.0` 开始，在 `deploy/version.txt` 统一维护。后续修复使用 `v1.0.1`，功能更新使用 `v1.1.0`。后台和 GitHub Release 标题显示此版本；`build-*` 是更新服务兼容性所需的内部构建标识，不用于对外版本展示。同版本重新构建仍可更新，安装判断和回滚继续使用构建标识。
+# v1.4.0 统一更新中心
+
+公开对接规范：`/api`（网页）与 `/api/spec`（原始 Markdown，供其他项目/AI 读取）。规范源码为 `src/api-contract.md`，与应用一起发布。
+
+- 管理端支持注册多个项目、绑定 GitHub `owner/repo`、独立生成/轮换/撤销项目令牌。
+- ZIP/清单可手动上传，或按明确版本从 GitHub 拉取。标准包名为 `{project}-update.zip`；标准清单 `update-manifest.json`；包内 `update-version.json`（导航站兼容 `nav-version.json`）。
+- 只接受 `vX.Y.Z` 正式 Release；比对两份 GitHub 资产的大小、SHA-256 digest。缺失或不匹配时不允许发布。手动上传后需点击来源校验，再手动发布。
+- 新 API：`GET /api/v1/projects/{project}/updates?current_version=1.0.0`，返回最新已发布记录、说明、双文件哈希与受保护下载 URL；固定版本及下载路径见 `/api`。查询不依赖 GitHub 在线。
+- 旧导航站令牌与发布记录保留。历史记录显示 `legacy-local`，不冒充 GitHub 验证；新草稿要求先绑定真实仓库并验证。保留 `/api/project-updates/hao52okp/*`，补充 `/api/updates/hao52okp/{version}` 兼容入口。
+
+部署新增要求：PHP cURL + ZIP、有效 CA 证书；私有仓库在服务器配置 `github_token`（只读 contents 权限，不能提交到 Git）。EdgeOne 对私有 `/api/*` 禁用缓存、透传 Authorization；私有传输使用 HTTPS 回源或受保护源站网络。普通安装包下载方式不变。
+
+网页拉取是同步请求，有等待提示，受 PHP/Nginx 超时限制；大文件可用 `bin/import-project-release.php 项目标识 1.0.1`（以 PHP-FPM 用户、正确 OSS_CONFIG 运行）。它只创建草稿，不自动发布。没有定时发现新版本；香港采集节点尚未实现/部署，未来替换采集层不改变客户端 API。客户端安装/备份/回滚仍需各项目按规范实现。
+
+历史部署说明仅供迁移参考；业务项目 API 契约以 `/api` 为准，OSS 自身 tar.gz 更新与业务 ZIP 分开。

@@ -6,7 +6,11 @@ require dirname(__DIR__) . '/src/categories.php';
 require dirname(__DIR__) . '/src/project-releases.php';
 header('X-Content-Type-Options: nosniff');
 $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-if (str_starts_with($route, '/api/project-updates/')) releaseApi($route);
+if (in_array($route, ['/api', '/api/', '/api/spec'], true)) {
+    if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true)) fail(405, 'Method not allowed');
+    require dirname(__DIR__) . '/src/api-docs.php'; exit;
+}
+if (str_starts_with($route, '/api/')) releaseApi($route);
 if ($route === '/health') {
     $ready = is_readable("$root/config/admin.php") && is_writable("$root/uploads") && is_writable("$root/metadata") && is_writable("$root/sessions");
     http_response_code($ready ? 200 : 503); header('Cache-Control: no-store'); header('Content-Type: application/json');
@@ -62,14 +66,21 @@ try {
                 header('Location: /'); exit;
             }
             if ($action === 'logout') { $_SESSION = []; session_destroy(); header('Location: /'); exit; }
-            if ($action === 'release_stage') releaseStage($_FILES);
+            if ($action === 'release_register') releaseRegister($_POST);
+            if ($action === 'release_stage') releaseStage($_FILES, (string)($_POST['release_project'] ?? 'hao52okp'));
+            if ($action === 'release_verify') releaseVerify((string)($_POST['release_id'] ?? ''));
+            if ($action === 'release_import') {
+                // Release session before network I/O so other admin tabs remain usable.
+                session_write_close();
+                releaseImport((string)($_POST['release_project'] ?? ''), (string)($_POST['release_version'] ?? ''));
+            }
             if ($action === 'release_publish') releasePublish((string)($_POST['release_id'] ?? ''));
             if ($action === 'release_token') {
                 $secret = bin2hex(random_bytes(32));
-                transaction('project-releases', function (&$data) use ($secret) { $data['token_hash'] = hash('sha256', $secret); });
+                releaseToken((string)($_POST['release_project'] ?? 'hao52okp'), $secret);
                 $_SESSION['release_token_once'] = $secret;
             }
-            if ($action === 'release_revoke') transaction('project-releases', function (&$data) { unset($data['token_hash']); });
+            if ($action === 'release_revoke') releaseToken((string)($_POST['release_project'] ?? 'hao52okp'), null);
             if ($action === 'upload') {
                 $category = fileCategory($_POST);
                 if (releasePrivate(['project' => $category['project'], 'name' => (string)($_FILES['file']['name'] ?? '')])) throw new RuntimeException('导航站源码包请使用专用的私有更新发布入口');
@@ -112,5 +123,5 @@ try {
 }
 $files = !empty($_SESSION['admin']) ? transaction('files', fn(&$data) => array_reverse($data, true), false) : [];
 $updates = !empty($_SESSION['admin']) ? updateStatus() : [];
-$projectReleases = !empty($_SESSION['admin']) ? transaction('project-releases', fn(&$data) => $data, false) : [];
+$projectReleases = !empty($_SESSION['admin']) ? releaseData(transaction('project-releases', fn(&$data) => $data, false)) : [];
 require dirname(__DIR__) . '/src/view.php';
