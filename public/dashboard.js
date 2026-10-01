@@ -1,4 +1,7 @@
 'use strict';
+document.querySelectorAll('.release-token-form').forEach(form => form.addEventListener('submit', event => {
+  if (!confirm('生成新令牌或撤销会使旧令牌立即失效，需要同步更新导航站服务器配置。确定继续？')) event.preventDefault();
+}));
 const filesView = document.querySelector('#files-view');
 const settingsView = document.querySelector('#settings-view');
 if (filesView && settingsView) {

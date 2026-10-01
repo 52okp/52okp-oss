@@ -15,7 +15,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
-          extensions: fileinfo
+          extensions: fileinfo, zip
       - run: find . -name '*.php' -not -path './shared/*' -print0 | xargs -0 -n1 php -l
       - run: php tests/check.php
       - run: php -d disable_functions=putenv tests/check.php

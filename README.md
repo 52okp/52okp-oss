@@ -1,6 +1,28 @@
 # PHP 文件云存储
 
-中文管理后台，公开下载直链，不包含 APP 版本管理。目标运行环境 PHP 8.5、Nginx、Linux 宝塔。无数据库或 Composer 依赖。
+中文文件管理后台，支持普通文件公开下载及 hao52okp 私有更新包发布。目标运行环境 PHP 8.5、Nginx、Linux 宝塔。无数据库或 Composer 依赖。
+
+## v1.3.0 hao52okp 私有更新发布
+
+后台「更新包发布」入口选择 hao52okp，同时上传 `hao52okp-update.zip` 与 `update-manifest.json`。兼容导航站 `scripts/build-update.php` 产生的 format 2 清单，保留原始清单内容。需要 PHP-FPM 启用 ZIP 扩展。ZIP 上限为站点限制与 200 MB 的较小值，清单上限 4 MB；Nginx/PHP/CDN 的 POST 限制需容纳两个文件和 multipart 开销。
+
+上传时检查清单 product、package、version/from、大小与 SHA-256、ZIP 一致性和内置 `nav-version.json`。不执行或解压源码。完整校验成功后才创建草稿；点击「发布」会再次校验 ZIP 和原始清单哈希，在同一个元数据锁和原子替换操作中更新已发布指针。上传中、失败和草稿均不影响当前发布。发布必须严格递增版本，重复版本不可覆盖；历史已发布包继续可供有权限的客户端下载。
+
+首次使用展开「私有接口与访问令牌」生成 256 位随机令牌，仅显示一次，数据库只保存 SHA-256。将令牌保存在导航站服务器配置中。轮换或撤销立即使旧令牌失效，撤销后需生成新令牌才能继续查询/下载。令牌不可放入 URL、浏览器端或仓库。
+
+接口（均为 GET/HEAD，使用 `Authorization: Bearer <令牌>`）：
+
+- `/api/project-updates/hao52okp/latest`：已发布版本、from、notes、size、sha256、published_at、download_url、manifest_url。无已发布版本返回 404。
+- `/api/project-updates/hao52okp/{发布ID}/package`：私有 ZIP。
+- `/api/project-updates/hao52okp/{发布ID}/manifest`：原始 JSON 清单。
+
+无令牌/错误令牌/撤销令牌返回 401；未发布包返回 404。下载地址本身不授予权限，两次下载也必须携带请求头。支持完整下载，不实现 Range；客户端获取后必须再次校验大小、SHA-256、清单文件哈希和其原有安装安全规则。响应声明 `Cache-Control: private, no-store` 与 `Vary: Authorization`。源代码由 PHP 鉴权后流式输出，不经公开 X-Accel 路径。
+
+**上线配置**：EdgeOne 对 `/api/project-updates/*` 禁止缓存并透传 Authorization；Nginx 不得为这一路径配置静态文件 alias。若 fastcgi 未传递 Authorization，在 PHP location 添加 `fastcgi_param HTTP_AUTHORIZATION $http_authorization;`。公网必须使用 HTTPS；当前 HTTP 回源链路不提供端到端加密，生产私有源码建议使用 HTTPS 回源或受保护的源站网络。
+
+**历史公开包**：属于项目 `hao52okp`、或文件名为 `hao52okp-update.zip` / `update-manifest.json` 的原公开下载被拒绝，也不能通过改分类重新公开。其他项目安装包保持原下载方式。此前已被 CDN 缓存的公开包必须在 EdgeOne 清除对应 `/d/{文件ID}` 缓存；此前已被下载的副本不能撤回。用其他项目名/文件名上传过的源码需管理员核查并移除公开文件。本功能不自动猜测压缩包是否源码。
+
+当前改动提供存储端发布和接口；导航站现有 GitHub 更新客户端需要另行切换到该查询 API，并为查询/清单/ZIP 三种请求携带令牌。不能只更改下载 URL。
 
 ## v1.1.0 后台界面
 

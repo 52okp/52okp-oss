@@ -7,8 +7,9 @@ foreach (['config', 'uploads', 'metadata', 'sessions', 'updater'] as $dir) mkdir
 $process = null; $pipes = []; $cookie = '';
 function assertHttp(bool $value, string $name): void { if (!$value) throw new RuntimeException($name); echo "PASS $name\n"; }
 function request(string $method, string $path, string $body = '', string $type = 'application/x-www-form-urlencoded', bool $useCookie = true): array {
-    global $port, $cookie;
+    global $port, $cookie, $apiToken;
     $headers = "Content-Type: $type\r\n";
+    if (!empty($apiToken)) $headers .= "Authorization: Bearer $apiToken\r\n";
     if ($useCookie && $cookie) $headers .= "Cookie: $cookie\r\n";
     $context = stream_context_create(['http' => ['method' => $method, 'header' => $headers, 'content' => $body, 'ignore_errors' => true, 'follow_location' => 0, 'timeout' => 5]]);
     $content = file_get_contents("http://127.0.0.1:$port$path", false, $context);
@@ -100,6 +101,7 @@ try {
     assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'delete', 'id' => '../config/admin.php']))[0] === 400, '删除路径穿越被拒绝');
     assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'delete', 'id' => $id]))[0] === 302, '管理员删除');
     assertHttp(request('GET', "/d/$id", '', 'application/x-www-form-urlencoded', false)[0] === 404, '删除后直链失效');
+    require __DIR__ . '/project-releases-http.php';
     assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'logout']))[0] === 302, '退出登录');
     [$status, $page] = request('GET', '/'); $token = csrf($page);
     for ($i = 0; $i < 4; $i++) request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'login', 'username' => 'tester', 'password' => 'wrong']));

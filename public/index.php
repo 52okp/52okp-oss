@@ -3,8 +3,10 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/src/bootstrap.php';
 require dirname(__DIR__) . '/src/updater.php';
 require dirname(__DIR__) . '/src/categories.php';
+require dirname(__DIR__) . '/src/project-releases.php';
 header('X-Content-Type-Options: nosniff');
 $route = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if (str_starts_with($route, '/api/project-updates/')) releaseApi($route);
 if ($route === '/health') {
     $ready = is_readable("$root/config/admin.php") && is_writable("$root/uploads") && is_writable("$root/metadata") && is_writable("$root/sessions");
     http_response_code($ready ? 200 : 503); header('Cache-Control: no-store'); header('Content-Type: application/json');
@@ -14,6 +16,7 @@ if (preg_match('~^/d/([a-f0-9]{64})$~D', $route, $match)) {
     if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true)) fail(405, 'Method not allowed');
     $id = $match[1];
     $entry = transaction('files', fn(&$files) => $files[$id] ?? null, false);
+    if ($entry && releasePrivate($entry)) { header('Cache-Control: private, no-store'); fail(404, '文件不存在'); }
     if (!$entry || !is_file("$root/uploads/$id")) fail(404, '文件不存在');
     header('Content-Type: application/octet-stream');
     header("Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''" . rawurlencode($entry['name']));
@@ -59,8 +62,17 @@ try {
                 header('Location: /'); exit;
             }
             if ($action === 'logout') { $_SESSION = []; session_destroy(); header('Location: /'); exit; }
+            if ($action === 'release_stage') releaseStage($_FILES);
+            if ($action === 'release_publish') releasePublish((string)($_POST['release_id'] ?? ''));
+            if ($action === 'release_token') {
+                $secret = bin2hex(random_bytes(32));
+                transaction('project-releases', function (&$data) use ($secret) { $data['token_hash'] = hash('sha256', $secret); });
+                $_SESSION['release_token_once'] = $secret;
+            }
+            if ($action === 'release_revoke') transaction('project-releases', function (&$data) { unset($data['token_hash']); });
             if ($action === 'upload') {
                 $category = fileCategory($_POST);
+                if (releasePrivate(['project' => $category['project'], 'name' => (string)($_FILES['file']['name'] ?? '')])) throw new RuntimeException('导航站源码包请使用专用的私有更新发布入口');
                 $upload = $_FILES['file'] ?? null;
                 if (!$upload || $upload['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('上传失败，请检查文件大小及服务器限制');
                 $size = filesize($upload['tmp_name']);
@@ -79,6 +91,7 @@ try {
                 $category = fileCategory($_POST);
                 transaction('files', function (&$files) use ($id, $category) {
                     if (!isset($files[$id])) throw new RuntimeException('文件不存在');
+                    if (releasePrivate($files[$id]) || releasePrivate($category + ['name' => $files[$id]['name']])) throw new RuntimeException('导航站源码分类不能通过公共文件列表更改，请使用私有更新发布入口');
                     $files[$id] = array_replace($files[$id], $category);
                 });
             } elseif ($action === 'delete') {
@@ -99,4 +112,5 @@ try {
 }
 $files = !empty($_SESSION['admin']) ? transaction('files', fn(&$data) => array_reverse($data, true), false) : [];
 $updates = !empty($_SESSION['admin']) ? updateStatus() : [];
+$projectReleases = !empty($_SESSION['admin']) ? transaction('project-releases', fn(&$data) => $data, false) : [];
 require dirname(__DIR__) . '/src/view.php';

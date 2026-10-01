@@ -34,7 +34,7 @@ function fixture(mode) {
     open() {} setRequestHeader() {}
     send(body) { this.body = body; }
   }
-  vm.runInNewContext(script, {document:{querySelector:selector => nodes[selector.slice(1)] || null,createElement:() => new Element()},window:{addEventListener(){}},location:{origin:'https://example.com'},URL,Date,Number,navigator:{clipboard:{writeText:async()=>{}}},XMLHttpRequest:XHR,FormData:class {constructor(){this.fields={};} set(key,value){this.fields[key]=value;}}});
+  vm.runInNewContext(script, {document:{querySelectorAll:()=>[],querySelector:selector => nodes[selector.slice(1)] || null,createElement:() => new Element()},window:{addEventListener(){}},location:{origin:'https://example.com'},URL,Date,Number,navigator:{clipboard:{writeText:async()=>{}}},XMLHttpRequest:XHR,FormData:class {constructor(){this.fields={};} set(key,value){this.fields[key]=value;}}});
   return {nodes,requests};
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
