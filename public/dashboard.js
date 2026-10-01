@@ -9,17 +9,6 @@ document.querySelectorAll('.release-network-form').forEach(form => form.addEvent
   if (feedback) feedback.textContent = '正在处理，请稍候。完成后页面自动刷新；超时后请先检查版本列表。';
   form.setAttribute('aria-busy', 'true');
 }));
-const filesView = document.querySelector('#files-view');
-const settingsView = document.querySelector('#settings-view');
-if (filesView && settingsView) {
-  function showView() {
-    const settings = location.hash === '#settings';
-    filesView.hidden = settings; settingsView.hidden = !settings;
-    document.querySelectorAll('.nav-link[data-view]').forEach(link => link.classList.toggle('active', link.dataset.view === (settings ? 'settings' : 'files')));
-    if (location.hash === '#updates') document.querySelector('#updates').scrollIntoView({block: 'start'});
-  }
-  window.addEventListener('hashchange', showView); showView();
-}
 const rowsContainer = document.querySelector('#file-rows');
 if (rowsContainer) {
   const rows = [...rowsContainer.querySelectorAll('.file-row')];

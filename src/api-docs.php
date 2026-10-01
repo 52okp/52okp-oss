@@ -15,7 +15,7 @@ $css = is_file(__DIR__ . '/../public/cloud.' . $digest . '.css') ? '/cloud.' . $
 ?>
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>52okp · 更新 API 对接文档</title><link rel="stylesheet" href="<?=h($css)?>"></head><body>
 <header class="topbar"><div class="topbar-inner"><a class="brand" href="/">52okp Cloud</a><span class="topbar-caption">开发者文档 · API v1</span></div></header>
-<main class="api-document"><div class="api-doc-actions"><a href="/api/spec">获取原始规范（供 AI / 开发者读取）</a><a href="/#project-releases">返回更新中心</a></div><article class="card">
+<main class="api-document"><div class="api-doc-actions"><a href="/api/spec">获取原始规范（供 AI / 开发者读取）</a><a href="/?view=releases">返回更新中心</a></div><article class="card">
 <?php
 // A deliberately small renderer for this trusted, bundled document; escape all text.
 $code = false;

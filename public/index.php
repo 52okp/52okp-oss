@@ -35,6 +35,8 @@ session_set_cookie_params(['secure' => true, 'httponly' => true, 'samesite' => '
 session_start();
 $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
 $error = '';
+$adminPage = is_string($_GET['view'] ?? null) ? $_GET['view'] : 'files';
+if (!in_array($adminPage, ['files', 'upload', 'projects', 'releases', 'updates', 'settings'], true)) $adminPage = 'files';
 if (($_GET['api'] ?? '') === 'updates') {
     if (empty($_SESSION['admin'])) fail(401, '请先登录');
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') fail(405, 'Method not allowed');
@@ -44,6 +46,9 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!hash_equals($_SESSION['csrf'], (string)($_POST['csrf'] ?? ''))) fail(403, 'CSRF 验证失败');
         $action = $_POST['action'] ?? '';
+        if (in_array($action, ['release_register', 'release_token', 'release_revoke'], true)) $adminPage = 'projects';
+        elseif (str_starts_with((string)$action, 'release_')) $adminPage = 'releases';
+        elseif (in_array($action, ['check_update', 'install_update'], true)) $adminPage = 'updates';
         if ($action === 'login') {
             $key = hash('sha256', $_SERVER['REMOTE_ADDR']);
             $allowed = transaction('attempts', function (&$attempts) use ($key) {
@@ -63,11 +68,11 @@ try {
             if (in_array($action, ['check_update', 'install_update'], true)) {
                 $job = updateSubmit($action === 'check_update' ? 'check' : 'install', (string)($_POST['tag'] ?? ''));
                 if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') { http_response_code(202); header('Content-Type: application/json'); echo json_encode(['job' => $job, 'status' => updateStatus()], JSON_UNESCAPED_UNICODE); exit; }
-                header('Location: /'); exit;
+                header('Location: /?view=updates'); exit;
             }
             if ($action === 'logout') { $_SESSION = []; session_destroy(); header('Location: /'); exit; }
-            if ($action === 'release_register') releaseRegister($_POST);
-            if ($action === 'release_stage') releaseStage($_FILES, (string)($_POST['release_project'] ?? 'hao52okp'));
+            if ($action === 'release_register') { releaseRegister($_POST); $_SESSION['notice'] = '项目已保存，可在更新包发布页面选择。'; }
+            if ($action === 'release_stage') releaseStage($_FILES, (string)($_POST['release_project'] ?? ''));
             if ($action === 'release_verify') releaseVerify((string)($_POST['release_id'] ?? ''));
             if ($action === 'release_import') {
                 // Release session before network I/O so other admin tabs remain usable.
@@ -77,10 +82,10 @@ try {
             if ($action === 'release_publish') releasePublish((string)($_POST['release_id'] ?? ''));
             if ($action === 'release_token') {
                 $secret = bin2hex(random_bytes(32));
-                releaseToken((string)($_POST['release_project'] ?? 'hao52okp'), $secret);
+                releaseToken((string)($_POST['release_project'] ?? ''), $secret);
                 $_SESSION['release_token_once'] = $secret;
             }
-            if ($action === 'release_revoke') releaseToken((string)($_POST['release_project'] ?? 'hao52okp'), null);
+            if ($action === 'release_revoke') releaseToken((string)($_POST['release_project'] ?? ''), null);
             if ($action === 'upload') {
                 $category = fileCategory($_POST);
                 if (releasePrivate(['project' => $category['project'], 'name' => (string)($_FILES['file']['name'] ?? '')])) throw new RuntimeException('导航站源码包请使用专用的私有更新发布入口');
@@ -115,7 +120,7 @@ try {
                 });
             }
         }
-        header('Location: /'); exit;
+        header('Location: /?view=' . $adminPage); exit;
     }
 } catch (Throwable $e) {
     http_response_code(400); $error = '操作失败：' . $e->getMessage();

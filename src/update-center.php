@@ -3,10 +3,15 @@ declare(strict_types=1);
 
 // Read-time normalization keeps v1.3 records usable without rewriting on anonymous requests.
 function releaseData(array $data): array {
-    if (!isset($data['projects']['hao52okp'])) {
+    $data['projects'] ??= [];
+    $legacy = !empty($data['token_hash']) || !empty($data['latest']);
+    foreach ($data['releases'] ?? [] as $release) if ($release['project'] === 'hao52okp') $legacy = true;
+    if ($legacy && !isset($data['projects']['hao52okp'])) {
         $data['projects']['hao52okp'] = ['id' => 'hao52okp', 'repository' => '', 'package' => 'hao52okp-update.zip', 'version_file' => 'nav-version.json', 'channel' => 'stable'];
         foreach (['token_hash', 'latest'] as $key) if (isset($data[$key])) $data['projects']['hao52okp'][$key] = $data[$key];
     }
+    $default = $data['projects']['hao52okp'] ?? null;
+    if ($default && !$legacy && empty($default['repository']) && empty($default['token_hash'])) unset($data['projects']['hao52okp']);
     return $data;
 }
 

@@ -1,14 +1,27 @@
 <?php
 // Included by http.php inside its isolated HTTP test environment.
 $apiPath = '/api/project-updates/hao52okp/latest';
+[, $emptyProjectPage] = request('GET', '/?view=projects');
+assertHttp(str_contains($emptyProjectPage, '尚未注册项目') && !str_contains($emptyProjectPage, 'value="hao52okp"'), '空白安装不创建默认导航站项目');
+assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_token']))[0] === 400, '未选择项目不能默认操作导航站');
+foreach (['files' => 'files-view', 'upload' => 'upload-view', 'projects' => 'projects-view', 'releases' => 'project-releases', 'updates' => 'updates-view', 'settings' => 'settings-view'] as $view => $panel) {
+    [, $viewPage] = request('GET', '/?view=' . $view);
+    $dom = new DOMDocument(); @$dom->loadHTML($viewPage); $xpath = new DOMXPath($dom);
+    assertHttp($xpath->query('//*[@id="' . $panel . '" and not(@hidden)]')->length === 1, '侧栏页面可独立打开：' . $view);
+    foreach (['files-view', 'upload-view', 'projects-view', 'project-releases', 'updates-view', 'settings-view'] as $other) {
+        if ($other !== $panel) assertHttp($xpath->query('//*[@id="' . $other . '" and @hidden]')->length === 1, '其他内容不堆叠：' . $view . '/' . $other);
+    }
+}
 assertHttp(request('GET', '/api', '', 'text/plain', false)[0] === 200 && str_contains(request('GET', '/api/spec', '', 'text/plain', false)[1], '/api/v1/projects/{project}/updates'), '公开 API 页面与原始规范无需登录');
 assertHttp(!str_contains(request('GET', '/api')[1], "\xEF\xBF\xBD") && str_contains(request('GET', '/api')[1], '安全解压'), '文档中文按UTF-8完整渲染');
-assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_register', 'release_project' => 'hao52okp', 'repository' => 'test-owner/hao52okp']))[0] === 302, '注册导航站来源仓库');
+[$savedStatus, , $savedHeaders] = request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_register', 'release_project' => 'hao52okp', 'repository' => 'test-owner/hao52okp']));
+assertHttp($savedStatus === 302 && str_contains($savedHeaders, 'Location: /?view=projects'), '保存项目后返回项目管理');
+assertHttp(str_contains(request('GET', '/?view=projects')[1], '项目已保存'), '保存项目后明确提示成功');
 assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_register', 'release_project' => 'hao52okp', 'repository' => 'other/repo']))[0] === 400, '已绑定来源不可静默替换');
 assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_register', 'release_project' => '../bad', 'repository' => 'http://127.0.0.1']))[0] === 400, '注册拒绝路径与任意来源URL');
 assertHttp(request('GET', $apiPath)[0] === 401, '私有更新查询必须鉴权，后台登录不替代令牌');
-assertHttp(request('POST', '/', http_build_query(['action' => 'release_token']))[0] === 403, '令牌管理需要CSRF');
-assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_token']))[0] === 302, '管理员生成项目令牌');
+assertHttp(request('POST', '/', http_build_query(['action' => 'release_token', 'release_project' => 'hao52okp']))[0] === 403, '令牌管理需要CSRF');
+assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_token', 'release_project' => 'hao52okp']))[0] === 302, '管理员生成项目令牌');
 [, $tokenPage] = request('GET', '/');
 preg_match('/aria-label="项目访问令牌" value="([a-f0-9]{64})"/', $tokenPage, $tokenMatch);
 $apiToken = $tokenMatch[1] ?? '';
@@ -23,7 +36,7 @@ $zipBytes = file_get_contents($zipFile); unlink($zipFile);
 $manifest = ['format' => 2, 'product' => 'hao52okp', 'package' => 'hao52okp-update.zip', 'version' => '1.0.1', 'from' => '1.0.0', 'size' => strlen($zipBytes), 'sha256' => hash('sha256', $zipBytes), 'notes' => '测试更新'];
 function releaseUploadBody(array $manifest, string $zipBytes, bool $includeManifest = true): string {
     global $token;
-    $body = "--release-test\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n$token\r\n--release-test\r\nContent-Disposition: form-data; name=\"action\"\r\n\r\nrelease_stage\r\n--release-test\r\nContent-Disposition: form-data; name=\"package\"; filename=\"hao52okp-update.zip\"\r\nContent-Type: application/zip\r\n\r\n$zipBytes\r\n";
+    $body = "--release-test\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n$token\r\n--release-test\r\nContent-Disposition: form-data; name=\"action\"\r\n\r\nrelease_stage\r\n--release-test\r\nContent-Disposition: form-data; name=\"release_project\"\r\n\r\nhao52okp\r\n--release-test\r\nContent-Disposition: form-data; name=\"package\"; filename=\"hao52okp-update.zip\"\r\nContent-Type: application/zip\r\n\r\n$zipBytes\r\n";
     if ($includeManifest) $body .= "--release-test\r\nContent-Disposition: form-data; name=\"manifest\"; filename=\"update-manifest.json\"\r\nContent-Type: application/json\r\n\r\n" . json_encode($manifest) . "\r\n";
     return $body . "--release-test--\r\n";
 }
@@ -120,7 +133,7 @@ $validToken = $apiToken; $apiToken = str_repeat('b', 64);
 assertHttp(request('GET', $packagePath)[0] === 401, '错误令牌拒绝下载');
 $apiToken = '';
 assertHttp(request('GET', $packagePath)[0] === 401, '匿名拒绝私有包下载');
-assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_revoke']))[0] === 302, '可撤销令牌');
+assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_revoke', 'release_project' => 'hao52okp']))[0] === 302, '可撤销令牌');
 $apiToken = $validToken;
 assertHttp(request('GET', $packagePath)[0] === 401, '撤销后旧令牌立即失效'); $apiToken = '';
 // Existing hao52okp public links must fail closed, other file projects are unaffected.
