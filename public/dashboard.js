@@ -1,4 +1,7 @@
 'use strict';
+document.querySelectorAll('.release-delete-form').forEach(form => form.addEventListener('submit', event => {
+  if (!confirm(`永久删除 ${form.dataset.project} v${form.dataset.version}？本地 ZIP 和清单会被删除，旧下载链接失效，无法撤销。GitHub 文件不会删除。`)) event.preventDefault();
+}));
 const releaseUpload = document.querySelector('#release-upload');
 if (releaseUpload) {
   const progress = document.querySelector('#release-upload-progress');

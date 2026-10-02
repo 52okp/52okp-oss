@@ -94,6 +94,49 @@ function releasePublish(string $id): void {
     });
 }
 
+// Validate under the metadata lock before touching either asset. Never accept paths from POST.
+function releaseDeletePaths(array $data, string $id, string $project): array {
+    global $root;
+    $r = $data['releases'][$id] ?? throw new RuntimeException('版本不存在或已删除');
+    if ($r['project'] !== $project) throw new RuntimeException('版本不属于所选项目');
+    foreach ($data['projects'] as $p) if (($p['latest'] ?? '') === $id) throw new RuntimeException('当前已发布版本不能删除，请先发布新版本');
+    if (($data['latest'] ?? '') === $id) throw new RuntimeException('当前已发布版本不能删除');
+    $directory = realpath("$root/uploads");
+    if ($directory === false) throw new RuntimeException('上传目录不存在');
+    $paths = [];
+    foreach (['package_id', 'manifest_id'] as $key) {
+        $blob = $r[$key] ?? '';
+        if (!is_string($blob) || !preg_match('/^[a-f0-9]{64}$/D', $blob)) throw new RuntimeException('版本文件标识异常，拒绝删除');
+        foreach ($data['releases'] as $otherId => $other) {
+            if ($otherId !== $id && in_array($blob, [$other['package_id'] ?? '', $other['manifest_id'] ?? ''], true)) throw new RuntimeException('文件被其他版本引用，拒绝删除');
+        }
+        $path = $directory . DIRECTORY_SEPARATOR . $blob;
+        clearstatcache(true, $path);
+        if (is_link($path) || (file_exists($path) && (!is_file($path) || dirname((string)realpath($path)) !== $directory))) throw new RuntimeException('版本文件路径异常，拒绝删除');
+        $paths[] = $path;
+    }
+    return $paths;
+}
+
+function releaseDelete(string $id, string $project): void {
+    if (!preg_match('/^[a-f0-9]{64}$/D', $id)) throw new RuntimeException('无效版本标识');
+    // Persist a non-downloadable tombstone first. A partial unlink or metadata failure
+    // leaves a retryable record instead of advertising an incomplete published release.
+    transaction('project-releases', function (&$data) use ($id, $project) {
+        $data = releaseData($data);
+        releaseDeletePaths($data, $id, $project);
+        $data['releases'][$id]['status'] = 'deleting';
+    });
+    transaction('project-releases', function (&$data) use ($id, $project) {
+        $data = releaseData($data);
+        if (!isset($data['releases'][$id])) return; // Another delete request completed it.
+        foreach (releaseDeletePaths($data, $id, $project) as $path) {
+            if (file_exists($path) && !@unlink($path)) throw new RuntimeException('本地文件清理未完成，请检查目录权限后重试删除；该版本已停止下载');
+        }
+        unset($data['releases'][$id]);
+    });
+}
+
 function releasePrivate(array $entry): bool {
     $name = strtolower((string)($entry['name'] ?? ''));
     if (strtolower(trim((string)($entry['project'] ?? ''))) === 'hao52okp' || in_array($name, ['hao52okp-update.zip', 'update-manifest.json'], true)) return true;

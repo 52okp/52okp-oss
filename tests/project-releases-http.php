@@ -168,3 +168,4 @@ file_put_contents("$scratch/metadata/files.json", json_encode($stored)); file_pu
 assertHttp(request('GET', '/d/' . $legacyPrivate, '', 'text/plain', false)[0] === 404, '历史导航站源码公开直链被封闭');
 assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'classify', 'id' => $legacyPrivate, 'project' => 'other', 'platform' => 'windows']))[0] === 400, '不能通过改分类将源码重新公开');
 assertHttp(request('GET', '/d/' . $legacyId, '', 'text/plain', false)[0] === 200, '私有发布功能不改变其他安装包公开下载');
+require __DIR__ . '/release-delete-http.php';

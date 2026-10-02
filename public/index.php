@@ -79,6 +79,11 @@ try {
                     http_response_code(201); header('Content-Type: application/json'); echo json_encode(['ok' => true]); exit;
                 }
             }
+            if ($action === 'release_delete') {
+                if (($_POST['delete_confirm'] ?? '') !== '1') throw new RuntimeException('请先确认永久删除该版本及本地文件');
+                releaseDelete((string)($_POST['release_id'] ?? ''), (string)($_POST['release_project'] ?? ''));
+                $_SESSION['notice'] = '该版本记录及本地 ZIP、清单已永久删除；GitHub 文件和其他版本不受影响。';
+            }
             if ($action === 'release_verify') releaseVerify((string)($_POST['release_id'] ?? ''));
             if ($action === 'release_import') {
                 // Release session before network I/O so other admin tabs remain usable.
