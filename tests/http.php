@@ -6,9 +6,9 @@ mkdir($scratch, 0700);
 foreach (['config', 'uploads', 'metadata', 'sessions', 'updater'] as $dir) mkdir("$scratch/$dir", 0700);
 $process = null; $pipes = []; $cookie = '';
 function assertHttp(bool $value, string $name): void { if (!$value) throw new RuntimeException($name); echo "PASS $name\n"; }
-function request(string $method, string $path, string $body = '', string $type = 'application/x-www-form-urlencoded', bool $useCookie = true): array {
+function request(string $method, string $path, string $body = '', string $type = 'application/x-www-form-urlencoded', bool $useCookie = true, string $extraHeaders = ''): array {
     global $port, $cookie, $apiToken;
-    $headers = "Content-Type: $type\r\n";
+    $headers = "Content-Type: $type\r\n" . $extraHeaders;
     if (!empty($apiToken)) $headers .= "Authorization: Bearer $apiToken\r\n";
     if ($useCookie && $cookie) $headers .= "Cookie: $cookie\r\n";
     $context = stream_context_create(['http' => ['method' => $method, 'header' => $headers, 'content' => $body, 'ignore_errors' => true, 'follow_location' => 0, 'timeout' => 5]]);

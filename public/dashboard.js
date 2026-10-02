@@ -1,4 +1,60 @@
 'use strict';
+const releaseUpload = document.querySelector('#release-upload');
+if (releaseUpload) {
+  const progress = document.querySelector('#release-upload-progress');
+  const status = document.querySelector('#release-upload-status');
+  const feedback = document.querySelector('#release-upload-feedback');
+  let busy = false;
+  releaseUpload.addEventListener('submit', event => {
+    event.preventDefault();
+    if (busy || !releaseUpload.reportValidity()) return;
+    const body = new FormData(releaseUpload); // Capture enabled controls, including CSRF and both files.
+    const project = String(body.get('release_project') || '');
+    const controls = [...releaseUpload.querySelectorAll('input, select, button')];
+    const disabled = controls.map(control => control.disabled);
+    busy = true; controls.forEach(control => { control.disabled = true; });
+    releaseUpload.setAttribute('aria-busy', 'true'); feedback.hidden = false;
+    feedback.dataset.state = 'uploading'; progress.value = 0; status.textContent = '正在上传 ZIP 和清单，0%。请保持页面打开。';
+    const finish = (message, state = 'failed') => {
+      busy = false; releaseUpload.setAttribute('aria-busy', 'false');
+      controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      feedback.dataset.state = state; status.textContent = message;
+      if (state !== 'success') progress.value = 0;
+    };
+    const validating = () => {
+      if (!busy) return;
+      feedback.dataset.state = 'validating'; progress.removeAttribute('value');
+      status.textContent = '文件传输完成（100%），服务器正在校验并保存，尚未确认成功…';
+    };
+    try {
+      const xhr = new XMLHttpRequest(); xhr.open('POST', '/?view=releases');
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); xhr.timeout = 600000;
+      xhr.upload.onprogress = event => {
+        if (!busy) return;
+        if (event.lengthComputable && event.total > 0) {
+          const percent = Math.min(100, Math.floor(event.loaded / event.total * 100));
+          if (percent === 100) { validating(); return; }
+          progress.value = percent;
+          status.textContent = `正在上传 ${percent}% · ${(event.loaded / 1048576).toFixed(2)} / ${(event.total / 1048576).toFixed(2)} MB（两份文件及请求数据）`;
+        } else { progress.removeAttribute('value'); status.textContent = '正在上传，暂时无法计算总进度…'; }
+      };
+      xhr.upload.onload = validating;
+      xhr.onload = () => {
+        let data; try { data = JSON.parse(xhr.responseText); } catch {
+          finish(`服务器响应异常（HTTP ${xhr.status}），请刷新发布记录确认结果，不要直接重复上传。`); return;
+        }
+        if (xhr.status !== 201 || data?.ok !== true) { finish(typeof data?.error === 'string' ? data.error : `上传未确认成功（HTTP ${xhr.status}），请检查登录、文件大小或刷新发布记录。`); return; }
+        progress.value = 100; finish('上传并本地校验成功，正在显示该项目的版本记录。', 'success');
+        location.assign('/?view=releases#release-project-' + encodeURIComponent(project));
+      };
+      xhr.onerror = () => finish('网络中断，上传结果未确认。请刷新发布记录后再决定是否重试。');
+      xhr.ontimeout = () => finish('请求超时，服务器可能仍在处理。请刷新发布记录确认结果。');
+      xhr.onabort = () => finish('上传已中断，请刷新发布记录确认结果。');
+      xhr.send(body);
+    } catch { finish('无法提交上传，请刷新发布记录确认结果后重试。'); }
+  });
+  window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
+}
 document.querySelectorAll('.release-token-form').forEach(form => form.addEventListener('submit', event => {
   if (!confirm('生成新令牌或撤销会使该项目旧令牌立即失效，需要同步更新客户端服务器配置。确定继续？')) event.preventDefault();
 }));

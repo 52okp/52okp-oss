@@ -45,7 +45,10 @@ assertHttp(request('POST', '/', releaseUploadBody($manifest, $zipBytes, false), 
 foreach (['size' => 999, 'sha256' => str_repeat('a', 64), 'version' => '1.0.2'] as $field => $value) {
     assertHttp(request('POST', '/', releaseUploadBody(array_replace($manifest, [$field => $value]), $zipBytes), $mime)[0] === 400, '发布前拒绝不一致：' . $field);
 }
-assertHttp(request('POST', '/', releaseUploadBody($manifest, $zipBytes), $mime)[0] === 302, '两个文件一致后进入待发布区');
+[$uploadStatus, $uploadJson] = request('POST', '/', releaseUploadBody($manifest, $zipBytes), $mime, true, "X-Requested-With: XMLHttpRequest\r\n");
+assertHttp($uploadStatus === 201 && json_decode($uploadJson, true)['ok'] === true, '两个文件一致后异步上传确认成功');
+[$uploadStatus, $uploadJson] = request('POST', '/', releaseUploadBody($manifest, $zipBytes, false), $mime, true, "X-Requested-With: XMLHttpRequest\r\n");
+assertHttp($uploadStatus === 400 && isset(json_decode($uploadJson, true)['error']), '异步上传失败返回可显示的JSON错误');
 $releaseData = json_decode(file_get_contents("$scratch/metadata/project-releases.json"), true); $releaseId = array_key_first($releaseData['releases']); $release = $releaseData['releases'][$releaseId];
 assertHttp(request('GET', $apiPath)[0] === 404, '完整上传但未发布时查询仍不可见');
 $packagePath = '/api/project-updates/hao52okp/' . $releaseId . '/package';
@@ -124,6 +127,15 @@ $myData = json_decode(file_get_contents("$scratch/metadata/project-releases.json
 assertHttp(request('GET', '/api/v1/projects/myapp/releases/' . $myId . '/package')[0] === 404, '拉取入库仍为不可下载草稿');
 assertHttp(request('POST', '/', http_build_query(['csrf' => $token, 'action' => 'release_publish', 'release_id' => $myId]))[0] === 302, '另一项目可使用相同版本号独立发布');
 assertHttp(request('GET', '/api/v1/projects/myapp/releases/' . $myId . '/package')[1] === $myBytes, '通用项目下载与包内版本验证通过');
+[, $releasePage] = request('GET', '/?view=releases');
+$dom = new DOMDocument(); @$dom->loadHTML($releasePage); $xpath = new DOMXPath($dom);
+assertHttp($xpath->query('//section[@data-release-project]')->length === 2, '已上传版本按项目独立分组');
+foreach (['hao52okp' => $releaseId, 'myapp' => $myId] as $projectId => $recordId) {
+    $query = '//section[@data-release-project="' . $projectId . '"]/details[@data-release-id="' . $recordId . '" and not(@open)]';
+    assertHttp($xpath->query($query)->length === 1 && str_contains($xpath->query($query . '/summary')->item(0)->textContent, 'v1.0.1'), '记录默认折叠且标题保留版本：' . $projectId);
+}
+assertHttp($xpath->query('//a[@href="/api" and @target="_blank" and contains(@rel,"noopener")]')->length === 2, '两个开发文档入口均在安全的新标签页打开');
+assertHttp($xpath->query('//*[@id="release-upload-progress"]')->length === 1, '上传ZIP与清单有专用进度条');
 assertHttp(releasePrivate(['name' => 'myapp-update.zip']) && !releasePrivate(['name' => 'installer.exe', 'project' => 'myapp']), '注册项目源码包拒绝公开但普通安装包不受影响');
 $normalized = releaseData(['token_hash' => hash('sha256', 'legacy'), 'latest' => $releaseId]);
 assertHttp($normalized['projects']['hao52okp']['latest'] === $releaseId && $normalized['projects']['hao52okp']['token_hash'] === hash('sha256', 'legacy'), '旧单项目令牌和latest可无损读取迁移');

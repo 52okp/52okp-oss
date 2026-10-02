@@ -72,7 +72,13 @@ try {
             }
             if ($action === 'logout') { $_SESSION = []; session_destroy(); header('Location: /'); exit; }
             if ($action === 'release_register') { releaseRegister($_POST); $_SESSION['notice'] = '项目已保存，可在更新包发布页面选择。'; }
-            if ($action === 'release_stage') releaseStage($_FILES, (string)($_POST['release_project'] ?? ''));
+            if ($action === 'release_stage') {
+                releaseStage($_FILES, (string)($_POST['release_project'] ?? ''));
+                $_SESSION['notice'] = '更新包上传并本地校验成功，已按项目保存为草稿；请继续校验 GitHub 后发布。';
+                if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+                    http_response_code(201); header('Content-Type: application/json'); echo json_encode(['ok' => true]); exit;
+                }
+            }
             if ($action === 'release_verify') releaseVerify((string)($_POST['release_id'] ?? ''));
             if ($action === 'release_import') {
                 // Release session before network I/O so other admin tabs remain usable.
@@ -124,7 +130,7 @@ try {
     }
 } catch (Throwable $e) {
     http_response_code(400); $error = '操作失败：' . $e->getMessage();
-    if (isset($action) && in_array($action, ['check_update', 'install_update'], true) && ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') { header('Content-Type: application/json'); echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE); exit; }
+    if (isset($action) && in_array($action, ['check_update', 'install_update', 'release_stage'], true) && ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') { header('Content-Type: application/json'); echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE); exit; }
 }
 $files = !empty($_SESSION['admin']) ? transaction('files', fn(&$data) => array_reverse($data, true), false) : [];
 $updates = !empty($_SESSION['admin']) ? updateStatus() : [];
