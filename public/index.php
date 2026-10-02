@@ -126,7 +126,13 @@ try {
                 });
             }
         }
-        header('Location: /?view=' . $adminPage); exit;
+        $redirect = '/?view=' . $adminPage;
+        if ($adminPage === 'releases') {
+            $releaseData = releaseData(transaction('project-releases', fn(&$data) => $data, false));
+            $returnProject = $releaseData['releases'][(string)($_POST['release_id'] ?? '')]['project'] ?? ($_POST['release_project'] ?? '');
+            if (is_string($returnProject) && isset($releaseData['projects'][$returnProject])) $redirect .= '&project=' . rawurlencode($returnProject);
+        }
+        header('Location: ' . $redirect); exit;
     }
 } catch (Throwable $e) {
     http_response_code(400); $error = '操作失败：' . $e->getMessage();
@@ -135,4 +141,7 @@ try {
 $files = !empty($_SESSION['admin']) ? transaction('files', fn(&$data) => array_reverse($data, true), false) : [];
 $updates = !empty($_SESSION['admin']) ? updateStatus() : [];
 $projectReleases = !empty($_SESSION['admin']) ? releaseData(transaction('project-releases', fn(&$data) => $data, false)) : [];
+$requestedProject = $_POST['release_project'] ?? $_GET['project'] ?? null;
+if (isset($_POST['release_id']) && is_string($_POST['release_id'])) $requestedProject = $projectReleases['releases'][$_POST['release_id']]['project'] ?? $requestedProject;
+$selectedProject = $requestedProject === null ? array_key_first($projectReleases['projects'] ?? []) : (is_string($requestedProject) && isset($projectReleases['projects'][$requestedProject]) ? $requestedProject : null);
 require dirname(__DIR__) . '/src/view.php';

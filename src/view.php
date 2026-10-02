@@ -50,7 +50,7 @@ if ($loggedIn) {
 
 <div class="account"><span class="avatar"><?php icon('user'); ?></span><span><?=h($adminInfo['username'])?></span><form method="post"><?php token(); ?><button class="quiet" name="action" value="logout">退出</button></form></div>
 <?php else: ?><span class="topbar-caption">安全管理 · 轻松分享</span><?php endif; ?></div></header>
-<?php if ($loggedIn): ?><aside class="admin-sidebar"><p class="sidebar-caption">工作空间</p><nav aria-label="功能分类"><?php foreach (['files' => ['folder', '文件管理'], 'upload' => ['upload', '上传文件'], 'projects' => ['database', '项目管理'], 'releases' => ['cloud', '更新包发布'], 'updates' => ['refresh', '程序更新'], 'settings' => ['settings', '系统信息']] as $key => [$symbol, $label]): ?><a class="sidebar-link<?= $adminPage === $key ? ' active' : '' ?>" href="/?view=<?=h($key)?>"<?= $adminPage === $key ? ' aria-current="page"' : '' ?>><?php icon($symbol); ?><?=h($label)?></a><?php endforeach; ?><a class="sidebar-link" href="/api" target="_blank" rel="noopener noreferrer"><?php icon('file'); ?>API 对接文档 ↗</a></nav><p class="sidebar-note">按功能进入独立页面<br>项目、文件与系统分别管理</p></aside><?php endif; ?>
+<?php if ($loggedIn) require __DIR__ . '/sidebar.php'; ?>
 <main>
 <?php if ($loggedIn && isset($_SESSION['notice'])): ?><p class="save-notice" role="status"><?=h($_SESSION['notice'])?></p><?php unset($_SESSION['notice']); endif; ?>
 <?php if ($error): ?><p class="error-banner" role="alert"><?=h($error)?></p><?php endif; ?>

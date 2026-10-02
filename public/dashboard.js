@@ -45,7 +45,7 @@ if (releaseUpload) {
         }
         if (xhr.status !== 201 || data?.ok !== true) { finish(typeof data?.error === 'string' ? data.error : `上传未确认成功（HTTP ${xhr.status}），请检查登录、文件大小或刷新发布记录。`); return; }
         progress.value = 100; finish('上传并本地校验成功，正在显示该项目的版本记录。', 'success');
-        location.assign('/?view=releases#release-project-' + encodeURIComponent(project));
+        location.assign('/?view=releases&project=' + encodeURIComponent(project) + '#release-project-' + encodeURIComponent(project));
       };
       xhr.onerror = () => finish('网络中断，上传结果未确认。请刷新发布记录后再决定是否重试。');
       xhr.ontimeout = () => finish('请求超时，服务器可能仍在处理。请刷新发布记录确认结果。');

@@ -23,7 +23,7 @@ test('真实上传进度与服务端校验分开，重复点击只提交一次',
  assert.equal(f.nodes['release-upload-progress'].value,undefined);assert.equal(f.redirects.length,0);
  f.requests[0].status=201;f.requests[0].responseText='{"ok":true}';f.requests[0].onload();
  assert.equal(f.nodes['release-upload-feedback'].dataset.state,'success');assert.equal(f.nodes['release-upload-progress'].value,100);
- assert.deepEqual(f.redirects,['/?view=releases#release-project-myapp']);assert.equal(f.controls[0].disabled,false);assert.equal(f.controls[1].disabled,true);
+ assert.deepEqual(f.redirects,['/?view=releases&project=myapp#release-project-myapp']);assert.equal(f.controls[0].disabled,false);assert.equal(f.controls[1].disabled,true);
 });
 test('校验错误显示原因且不跳转或冒充成功',()=>{
  const f=fixture();f.submit();const x=f.requests[0];x.upload.onload();x.status=400;x.responseText='{"error":"ZIP SHA-256 不一致"}';x.onload();

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $releaseGroups = [];
-foreach ($projectReleases['releases'] ?? [] as $release) $releaseGroups[$release['project']][] = $release;
+foreach ($projectReleases['releases'] ?? [] as $release) if ($release['project'] === $selectedProject) $releaseGroups[$release['project']][] = $release;
 ksort($releaseGroups, SORT_NATURAL);
 ?>
 <div class="release-groups">
